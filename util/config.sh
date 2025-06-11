@@ -21,12 +21,13 @@ main() {
     withdefault BUILD_CONFIG    "default"
     if [ "$BUILD_CONFIG" = "default" ]; then
         # building for host platform
-        withdefault BUILD_PLATFORM  "$(uname -m)"
-        withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
-        withdefault BUILD_FILE      "docker/Dockerfile"
-        withdefault BUILD_TAG       "ghcr.io/kth-sml/svea:latest"
-        withdefault IMAGE_TAG       "$REPOSITORY_NAME"
-        withdefault IMAGE_PUSH      "0"
+        if [ "$(uname -m)" = "arm64" ]; then
+            withdefault BUILD_PLATFORM "linux/arm64"
+        elif [ "$(uname -m)" = "x86_64" ]; then
+            withdefault BUILD_PLATFORM "linux/amd64"
+        else
+            withdefault BUILD_PLATFORM "linux/$(uname -m)"
+        fi
     elif [ "$BUILD_CONFIG" = "base" ]; then
         # building for host platform
         withdefault BUILD_PLATFORM  "$(uname -m)"
