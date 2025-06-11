@@ -16,12 +16,17 @@ if isempty ARGS; then
     ARGS="--name $CONTAINER_NAME"
 fi
 
+if [ "$(uname)" = "Darwin" ]; then
+    append ARGS "-i"
+else
+    append ARGS "-it"
+fi
+
 # Other docker arguments
 append ARGS \
-    -it \
     -v "$SHARED_VOLUME" \
     -e "TERM=xterm-256color" \
-    --rm \
+    --rm
 
 if istrue DEV; then
     append ARGS \
