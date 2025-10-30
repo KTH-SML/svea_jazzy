@@ -27,13 +27,13 @@ qos_pubber = QoSProfile(
 class ShowPath(rx.Field):
     
     TRAVEL_DIST_THRESH = 0.1
-    PATH_MAX_LEN = 100
+    PATH_MAX_LEN = 50
     chassis_height=0.06
 
     odometry_top = rx.Parameter('odometry/local')
 
-    past_path_pub = rx.Publisher(Path,'past_path',qos_pubber)
-    path_pub = rx.Publisher(Path, 'path_plan',qos_pubber)
+    past_path_pub = rx.Publisher(Path, 'past_path', qos_pubber)
+    path_pub = rx.Publisher(Path, 'path_plan', qos_pubber)
 
     @rx.Subscriber(Odometry, odometry_top, qos_subber)
     def odometry_callback(self, msg):
@@ -44,7 +44,7 @@ class ShowPath(rx.Field):
         path.poses = self.past_path
         self.past_path_pub.publish(path)
     
-    def __ini__(self):
+    def __init__(self):
 
         self.past_path = deque(maxlen=self.PATH_MAX_LEN)
     
