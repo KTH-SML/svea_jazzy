@@ -9,7 +9,7 @@ from svea_core.interfaces import LocalizationInterface
 from svea_core.controllers.pure_pursuit import PurePursuitController
 from svea_core.interfaces import ActuationInterface
 from svea_core import rosonic as rx
-from svea_core.utils import PlaceMarker, ShowPath
+from svea_core.utils import ShowMarker, ShowPath
 
 
 class pure_pursuit(rx.Node):  # Inherit from rx.Node
@@ -46,7 +46,7 @@ class pure_pursuit(rx.Node):  # Inherit from rx.Node
         points: List of points defining the path to follow.
         actuation: Actuation interface for sending control commands.
         localizer: Localization interface for receiving state information.
-        mark: PlaceMarker for visualizing the goal.
+        goal_mark: ShowMarker for visualizing the goal.
         path: ShowPath for visualizing the path.
     """
 
@@ -58,12 +58,12 @@ class pure_pursuit(rx.Node):  # Inherit from rx.Node
     target_velocity = rx.Parameter(0.6)
     
     # Interfaces
+    
     actuation = ActuationInterface()
     localizer = LocalizationInterface()
-    # Goal Visualization
-    mark = PlaceMarker()
-    # Path Visualization
-    #path = ShowPath()
+    
+    goal_marker = ShowMarker() # for goal visualization
+    # path = ShowPath() # for path visualization
 
     def on_startup(self):
         """
@@ -88,7 +88,7 @@ class pure_pursuit(rx.Node):  # Inherit from rx.Node
 
         self.curr = 0
         self.goal = self._points[self.curr]
-        self.mark.marker('goal','blue',self.goal)
+        self.goal_marker.place([*self.goal, 0.5], color='blue')
         self.update_traj(x, y)
 
         self.create_timer(self.DELTA_TIME, self.loop)
@@ -124,7 +124,7 @@ class pure_pursuit(rx.Node):  # Inherit from rx.Node
         self.goal = self._points[self.curr]
         self.controller.is_finished = False
         # Mark the goal
-        self.mark.marker('goal','blue',self.goal)
+        self.goal_marker.place([*self.goal, 0.5], color='blue')
 
     def update_traj(self, x, y):
         """

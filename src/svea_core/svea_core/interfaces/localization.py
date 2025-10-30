@@ -36,10 +36,10 @@ class LocalizationInterface(rx.Field):
     as state information is available.
     """
 
-    class _InterfaceParameters(rx.NamedField):
-        odom_top = rx.Parameter('odometry/local')
+    localization = rx.namespace(
+        odom_top = rx.Parameter('odometry/local'),
+    )
 
-    _params = _InterfaceParameters(name='localization')
     _odom_msg = Odometry()
 
     def __init__(self) -> None:
@@ -57,7 +57,7 @@ class LocalizationInterface(rx.Field):
         self.node.get_logger().info("Localization interface is ready.")
         return self._is_started
         
-    @rx.Subscriber(Odometry, _params.odom_top, qos_profile=qos_profile)
+    @rx.Subscriber(Odometry, localization.odom_top, qos_profile=qos_profile)
     def _odom_cb(self, msg: Odometry) -> None:
         if not self._is_started():
             return

@@ -58,10 +58,10 @@ class ActuationInterface(rx.Field):
 
     is_sim = rx.Parameter(False)
 
-    steering_pub = rx.Publisher(Int8, 'lli/ctrl/steering', qos_profile=QoS_DEFAULT)
-    throttle_pub = rx.Publisher(Int8, 'lli/ctrl/throttle', qos_profile=QoS_DEFAULT)
-    highgear_pub = rx.Publisher(Bool, 'lli/ctrl/highgear', qos_profile=QoS_RELIABLE)
-    diff_pub = rx.Publisher(Bool, 'lli/ctrl/diff', qos_profile=QoS_RELIABLE)
+    steering_pub = rx.Publisher(Int8, '/lli/ctrl/steering', qos_profile=QoS_DEFAULT)
+    throttle_pub = rx.Publisher(Int8, '/lli/ctrl/throttle', qos_profile=QoS_DEFAULT)
+    highgear_pub = rx.Publisher(Bool, '/lli/ctrl/highgear', qos_profile=QoS_RELIABLE)
+    diff_pub = rx.Publisher(Bool, '/lli/ctrl/diff', qos_profile=QoS_RELIABLE)
 
     def __init__(self, rate=20, use_acceleration=False, highgear=False, diff=False):
         self.acceleration = use_acceleration

@@ -70,10 +70,10 @@ class sim_svea(rx.Node):
     time_step = 0.025
     publish_tf = rx.Parameter(True)
 
-    steering_request_top = rx.Parameter('lli/ctrl/steering')
-    throttle_request_top = rx.Parameter('lli/ctrl/throttle')
-    highgear_request_top = rx.Parameter('lli/ctrl/highgear')
-    diff_request_top = rx.Parameter('lli/ctrl/diff')
+    steering_request_top = rx.Parameter('/lli/ctrl/steering')
+    throttle_request_top = rx.Parameter('/lli/ctrl/throttle')
+    highgear_request_top = rx.Parameter('/lli/ctrl/highgear')
+    diff_request_top = rx.Parameter('/lli/ctrl/diff')
 
     odometry_top = rx.Parameter('odometry/local')
 
