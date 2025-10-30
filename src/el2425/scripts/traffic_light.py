@@ -4,11 +4,10 @@
 import random
 
 from rclpy.clock import Clock, Duration
-from svea_core import rosonic as rx
 from std_msgs.msg import String, Float32
-from visualization_msgs.msg import Marker
 
-from svea_core.utils import PlaceMarker
+from svea_core import rosonic as rx
+from svea_core.utils import ShowMarker
 
 class traffic_light(rx.Node):
 
@@ -28,7 +27,6 @@ class traffic_light(rx.Node):
 
     ## Parameters
 
-    name = rx.Parameter('traffic_light')
     rate = rx.Parameter(10)
     alpha = rx.Parameter(1.0)
 
@@ -39,11 +37,10 @@ class traffic_light(rx.Node):
 
     state_pub = rx.Publisher(String, 'state')
     time_pub = rx.Publisher(Float32, 'time_left')
-    viz_pub = rx.Publisher(Marker, 'visualization')
 
     ## Interfaces
 
-    marker = PlaceMarker()
+    marker = ShowMarker()
 
     ## Methods
 
@@ -98,14 +95,12 @@ class traffic_light(rx.Node):
     def visualize_traffic_lights(self):
         """Publish the positions of traffic lights for visualization in RViz."""
         
-        if self._state == 'Rd':
-            self.marker.marker(self.name, 'red', [self.pos_x, self.pos_y, 1.0])
-        elif self._state == 'Gr':
-            self.marker.marker(self.name, 'green', [self.pos_x, self.pos_y, 1.0])
-        elif self._state in ('YG', 'YR'):
-            self.marker.marker(self.name, 'yellow', [self.pos_x, self.pos_y, 1.0])
-        else:
-            self.marker.marker(self.name, 'black', [self.pos_x, self.pos_y, 1.0])
+        color = ('red' if self._state == 'Rd' else
+                 'green' if self._state == 'Gr' else
+                 'yellow' if self._state in ('YG', 'YR') else
+                 'black')
+
+        self.marker.place([self.pos_x, self.pos_y, 1.0], color=color)
 
 if __name__ == '__main__':
 
