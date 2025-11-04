@@ -658,6 +658,7 @@ class Parameter(NamedField):
     ### Notes:
     - The parameter is not resolved (no value) until node startup is complete.
     - Until then, accessing the field will return the Parameter object itself.
+    - TODO: Dynamically updatable parameters?
     """
 
     def __init__(self, *args, name: str | None = None):
@@ -687,8 +688,10 @@ class Parameter(NamedField):
         node = self.__rosonic_node__
         name = self.__rosonic_relname__
         
-        if self.value is ...:
+        if not node.has_parameter(name):
             node.declare_parameter(name, *self.args)
+
+        if self.value is ...:
             self.value = node.get_parameter(name).value
     
 class Publisher(NamedField):
