@@ -6,24 +6,41 @@
 # Author: Kaj Munhoz Arfvidsson
 
 ## Uncomment to build base image for amd64 (x86) or arm64.
+## Uncomment to build base image for amd64 (x86) or arm64.
 # BUILD_CONFIG="base-amd64"
 # BUILD_CONFIG="base-arm64"
 
 
 main() {
 
-    if isempty BUILD_CONFIG && is_darwin; then
-        BUILD_CONFIG="arm64"
-    fi
-
-
     withdefault DEBUG "0"
+    withdefault BUILD_CONFIG "host"
 
     withdefault ROSDISTRO       "jazzy"
     withdefault WORKSPACE       "/svea_ws"
     withdefault REPOSITORY_PATH "$(climb entrypoint)"
     withdefault REPOSITORY_NAME "$(basename "$REPOSITORY_PATH")"
 
+    ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+
+    # If host or base-host, then update to host's platform
+    _host="$(is_arm64 && echo "arm64" || echo "amd64";)"
+    BUILD_CONFIG="$(                        \
+        switch "$BUILD_CONFIG"              \
+            "host"          "$_host"        \
+            "base-host"     "base-$_host"   \
+                            "$BUILD_CONFIG" \
+    )"
+
+    if [ "$BUILD_CONFIG" = "amd64" ]; then
+        withdefault BUILD_PLATFORM  "linux/amd64"
+        withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
+        withdefault BUILD_FILE      "docker/Dockerfile"
+        withdefault BUILD_TAG       "ghcr.io/kth-sml/svea:latest"
+        withdefault IMAGE_TAG       "$REPOSITORY_NAME"
+        withdefault IMAGE_PUSH      "0"
+    elif [ "$BUILD_CONFIG" = "arm64" ]; then
+        withdefault BUILD_PLATFORM  "linux/arm64"
     if is_arm64; then
         withdefault BUILD_CONFIG    "arm64"
     else
@@ -45,49 +62,48 @@ main() {
         withdefault BUILD_TAG       "ghcr.io/kth-sml/svea:latest"
         withdefault IMAGE_TAG       "$REPOSITORY_NAME"
         withdefault IMAGE_PUSH      "0"
-    elif [ "$BUILD_CONFIG" = "base-host" ]; then
+    elif [ "$BUILD_CONFIG" = "base-host-host" ]; then
         # building for host platform
         withdefault BUILD_PLATFORM  "$(uname -m)"
         withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
-        withdefault BUILD_FILE      "docker/Dockerfile.base"
-        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base"
+        withdefault BUILD_FILE      "docker/Dockerfile.base.base"
+        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base-ros-base"
         withdefault IMAGE_TAG       "ghcr.io/kth-sml/svea:latest"
         withdefault IMAGE_PUSH      "0"
     elif [ "$BUILD_CONFIG" = "base-amd64" ]; then
         # building for x86_64
         withdefault BUILD_PLATFORM  "linux/amd64"
         withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
-        withdefault BUILD_FILE      "docker/Dockerfile.base"
-        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base"
+        withdefault BUILD_FILE      "docker/Dockerfile.base.base"
+        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base-ros-base"
         withdefault IMAGE_TAG       "ghcr.io/kth-sml/svea:latest"
         withdefault IMAGE_PUSH      "0"
     elif [ "$BUILD_CONFIG" = "base-arm64" ]; then
         # building for arm64/aarch64/jetson
         withdefault BUILD_PLATFORM  "linux/arm64"
         withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
-        withdefault BUILD_FILE      "docker/Dockerfile.base"
-        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base"
+        withdefault BUILD_FILE      "docker/Dockerfile.base.base"
+        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base-ros-base"
         withdefault IMAGE_TAG       "ghcr.io/kth-sml/svea:latest"
-        withdefault IMAGE_PUSH      "0"
-    elif [ "$BUILD_CONFIG" = "arm64" ]; then
-        # building for arm64 (macOS Apple Silicon)
-        withdefault BUILD_PLATFORM  "linux/arm64"
-        withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
-        withdefault BUILD_FILE      "docker/Dockerfile"
-        withdefault BUILD_TAG       "ghcr.io/kth-sml/svea:latest"
-        withdefault IMAGE_TAG       "$REPOSITORY_NAME"
         withdefault IMAGE_PUSH      "0"
     elif [ "$BUILD_CONFIG" = "ghcr" ]; then
         # building for both amd64 and arm64
         withdefault BUILD_PLATFORM  "linux/arm64,linux/amd64"
         withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
-        withdefault BUILD_FILE      "docker/Dockerfile"
-        withdefault BUILD_TAG       "ros:$ROSDISTRO"
+        withdefault BUILD_FILE      "docker/Dockerfile.base"
+        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base"
         withdefault IMAGE_TAG       "ghcr.io/kth-sml/svea:latest"
         withdefault IMAGE_PUSH      "1"
     else
         echo "Error: Unknown BUILD_CONFIG \"$BUILD_CONFIG\""
         exit 1
+    else
+        echo "Error: Unknown BUILD_CONFIG \"$BUILD_CONFIG\""
+        exit 1
+    fi
+
+    if [ "$BUILD_FILE" = "docker/Dockerfile.base" ]; then
+        withdefault USER_CREDENTIALS "svea:SVEA-Pass!" # TODO: Setup regular user instead of root
     fi
 
     withdefault CONTAINER_NAME "$REPOSITORY_NAME"
@@ -132,6 +148,12 @@ jetson_release() {
 # Check if running on macOS (Darwin)
 is_darwin() {
     [ "$(uname -s)" = "Darwin" ]
+}
+
+## Detect arm64 architecture
+is_arm64() {
+    ARCH="$(uname -m)"
+    [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]
 }
 
 ## Detect arm64 architecture
@@ -199,6 +221,12 @@ echovar() {
     eval "echo \"$1=\$$1\""
 }
 
+# Echo to stderr
+# > echoerr STR...
+echoerr() {
+    echo "$@" 1>&2
+}
+
 # Set shell variable with default
 # > withdefault NAME DEFAULT
 withdefault() {
@@ -215,16 +243,19 @@ ifelse() {
 }
 
 # If VALUE equals COND then echo RET, otherwise shift
-# and continue with following arguments
-# > switch VALUE [[COND RET]...]
+# and continue with following arguments. If no case is
+# matched, echo DEFAULT or "".
+# > switch VALUE [[COND RET]...] [DEFAULT]
 switch() {
     VALUE="$1"
     shift
-    if [ "$VALUE" = "$1" ]; then 
-        echo "$2"
-    elif [ "$#" -ge 2 ]; then
-        shift 2
-        switch "$VALUE" "$@"
+    if [ "$#" -ge 2 ]; then
+        if [ "$VALUE" = "$1" ]; then 
+            echo "$2"
+        else
+            shift 2
+            switch "$VALUE" "$@"
+        fi
     else
         echo "$@" # echo nothing or remaining arg
     fi
