@@ -7,7 +7,7 @@ from rclpy.clock import Clock, Duration
 from std_msgs.msg import String, Float32
 
 from svea_core import rosonic as rx
-from svea_core.utils import ShowMarker
+from svea_core.interfaces import ShowMarker
 
 class traffic_light(rx.Node):
 
@@ -35,8 +35,8 @@ class traffic_light(rx.Node):
 
     ## Publishers
 
-    state_pub = rx.Publisher(String, 'state')
-    time_pub = rx.Publisher(Float32, 'time_left')
+    state_pub = rx.Publisher(String, '~/state')
+    time_pub = rx.Publisher(Float32, '~/time_left')
 
     ## Interfaces
 

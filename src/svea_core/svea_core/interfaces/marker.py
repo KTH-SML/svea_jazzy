@@ -17,7 +17,8 @@ qos_pubber = QoSProfile(
 
 class ShowMarker(rx.NamedField):
     
-    _pub = rx.Publisher(Marker, '{parent}', qos_profile=qos_pubber)
+    # {parent} will expand to name of interface
+    _pub = rx.Publisher(Marker, '~/{parent}', qos_profile=qos_pubber)
 
     def place(
         self,

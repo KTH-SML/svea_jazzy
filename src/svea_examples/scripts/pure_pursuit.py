@@ -7,9 +7,8 @@ from tf_transformations import quaternion_from_euler
 
 from svea_core.interfaces import LocalizationInterface
 from svea_core.controllers.pure_pursuit import PurePursuitController
-from svea_core.interfaces import ActuationInterface
+from svea_core.interfaces import ActuationInterface, ShowMarker, ShowPath
 from svea_core import rosonic as rx
-from svea_core.utils import ShowMarker, ShowPath
 
 
 class pure_pursuit(rx.Node):  # Inherit from rx.Node
