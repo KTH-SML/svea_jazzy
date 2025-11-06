@@ -37,7 +37,12 @@
         <!--LLI Fixers-->
         <node pkg="svea_core" exec="encoder_filter.py" name="encoder_filter" output="screen"/>
         <node pkg="svea_core" exec="imu_bias_remover.py" name="imu_bias_remover" output="screen"/>
-        <node pkg="svea_core" exec="lidar_timer.py" name="lidar_timer" output="screen"/>
+        <node pkg="svea_core" exec="lidar_timer.py" name="lidar_timer" output="screen">
+            <param name="target_frame" value="$(var name)/base_link"/>
+            <param name="source_frame" value="$(var name)/odom"/>
+            <param name="from_topic"   value="$(var name)/scan"/>
+            <param name="to_topic"     value="$(var name)/scan/filtered"/>
+        </node>
     </group>
 
     <!-- Localization -->
