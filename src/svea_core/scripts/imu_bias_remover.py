@@ -31,7 +31,7 @@ class imu_bias_remove(rx.Node):
     sample_counter = 0
 
     ## Publishers ##
-    imu_re_pub = rx.Publisher(Imu, '/imu/filtered', qos_pubber)
+    imu_re_pub = rx.Publisher(Imu, '/lli/filtered/imu', qos_pubber)
 
     ## Subscribers ##
     @rx.Subscriber(Imu, '/lli/sensor/imu', qos_subber)

@@ -73,7 +73,7 @@ class LocalizationInterface(rx.Field):
         self,
         odom: Odometry,
         pose_target: str = "map",
-        twist_target: str = "base_link",
+        twist_target: str = "self/base_link",
         timeout_s: float = 0.2,
     ) -> Odometry:
         """
