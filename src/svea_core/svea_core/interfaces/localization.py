@@ -37,6 +37,9 @@ class LocalizationInterface(rx.Field):
     """
 
     localization = rx.namespace(
+        map_frame = rx.Parameter('map'),
+        odom_frame = rx.Parameter('self/odom'),
+        base_frame = rx.Parameter('self/base_link'),
         odom_top = rx.Parameter('odometry/local'),
     )
 
@@ -72,8 +75,8 @@ class LocalizationInterface(rx.Field):
     def transform_odom(
         self,
         odom: Odometry,
-        pose_target: str = "map",
-        twist_target: str = "self/base_link",
+        pose_target: str | None = None,
+        twist_target: str | None = None,
         timeout_s: float = 0.2,
     ) -> Odometry:
         """
@@ -87,6 +90,11 @@ class LocalizationInterface(rx.Field):
         """
 
         assert self._is_started(), 'Localization interface not started yet'
+
+        if pose_target is None:
+            pose_target = self.localization.map_frame
+        if twist_target is None:
+            twist_target = self.localization.base_frame
 
         # ---- Source frames from the incoming message ----
         pose_source  = odom.header.frame_id or ""

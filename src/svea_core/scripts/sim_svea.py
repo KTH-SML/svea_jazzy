@@ -77,10 +77,11 @@ class sim_svea(rx.Node):
 
     odometry_top = rx.Parameter('odometry/local')
 
-    steering_request_top = rx.Parameter('/lli/ctrl/steering')
-    throttle_request_top = rx.Parameter('/lli/ctrl/throttle')
-    highgear_request_top = rx.Parameter('/lli/ctrl/highgear')
-    diff_request_top = rx.Parameter('/lli/ctrl/diff')
+    # In simulation, we want lli to be namespaced
+    steering_request_top = rx.Parameter('lli/ctrl/steering')
+    throttle_request_top = rx.Parameter('lli/ctrl/throttle')
+    highgear_request_top = rx.Parameter('lli/ctrl/highgear')
+    diff_request_top = rx.Parameter('lli/ctrl/diff')
 
     map_frame = rx.Parameter('map')
     odom_frame = rx.Parameter('odom')
