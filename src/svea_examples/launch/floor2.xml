@@ -42,10 +42,10 @@
         <include file="$(find-pkg-share svea_core)/launch/svea.xml">
             <arg name="name" value="$(var name)" />
             <arg name="is_sim" value="$(var is_sim)"/>
-            <arg name="initial_pose_x" value="$(var initial_pose_x)" />
-            <arg name="initial_pose_y" value="$(var initial_pose_y)" />
-            <arg name="initial_pose_a" value="$(var initial_pose_a)" />
-            <arg name="map" value="$(var map)" />
+            <arg name="initial_pose_x" value="$(var initial_pose_x)"/>
+            <arg name="initial_pose_y" value="$(var initial_pose_y)"/>
+            <arg name="initial_pose_a" value="$(var initial_pose_a)"/>
+            <arg name="map" value="$(var map)"/>
         </include>
 
         <push-ros-namespace namespace="$(var name)"/>
@@ -53,7 +53,7 @@
         <!-- Start pure_pursuit -->
         <node name="pure_pursuit" pkg="svea_examples" exec="pure_pursuit.py" output="screen">
             <param name="is_sim" value="$(var is_sim)"/>
-            <param name="points" value="$(var points)" />
+            <param name="points" value="$(var points)"/>
             <param name="localization/base_frame" value="$(var name)/base_link"/>
             <!-- Allow namespace -->
             <param name="steering_top" value="lli/ctrl/steering"/>
@@ -70,10 +70,10 @@
         <include file="$(find-pkg-share svea_core)/launch/svea.xml">
             <arg name="name" value="$(var name)" />
             <arg name="is_sim" value="$(var is_sim)"/>
-            <arg name="initial_pose_x" value="0.0" />
-            <arg name="initial_pose_y" value="0.0" />
-            <arg name="initial_pose_a" value="$(var initial_pose_a)" />
-            <arg name="map" value="$(var map)" />
+            <arg name="initial_pose_x" value="0.0"/>
+            <arg name="initial_pose_y" value="0.0"/>
+            <arg name="initial_pose_a" value="$(var initial_pose_a)"/>
+            <arg name="map" value="$(var map)"/>
         </include>
 
         <push-ros-namespace namespace="$(var name)"/>
@@ -82,6 +82,7 @@
         <node name="pure_pursuit" pkg="svea_examples" exec="pure_pursuit.py" output="screen">
             <param name="is_sim" value="$(var is_sim)"/>
             <param name="points" value="$(var points)"/>
+            <param name="target_velocity" value="0.4"/>
             <param name="localization/base_frame" value="$(var name)/base_link"/>
             <!-- Allow namespace -->
             <param name="steering_top" value="lli/ctrl/steering"/>
