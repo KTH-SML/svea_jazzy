@@ -34,4 +34,15 @@
     ]
   },
 
+  ////
+  //// Configure the scouting mechanisms and their behaviours
+  ////
+  scouting: {
+    /// The UDP multicast scouting configuration.
+    multicast: {
+      /// Whether multicast scouting is enabled or not
+      enabled: false,
+    },
+  },
+
 }
