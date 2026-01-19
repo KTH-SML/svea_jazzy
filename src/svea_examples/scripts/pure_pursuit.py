@@ -2,13 +2,17 @@
 
 import numpy as np
 
+from geometry_msgs.msg import PoseWithCovarianceStamped
+from tf_transformations import quaternion_from_euler
+
 from svea_core.interfaces import LocalizationInterface
 from svea_core.controllers.pure_pursuit import PurePursuitController
-from svea_core.interfaces import ActuationInterface, ShowMarker, ShowPath
+from svea_core.interfaces import ActuationInterface
 from svea_core import rosonic as rx
+from svea_core.utils import PlaceMarker, ShowPath
 
 
-class pure_pursuit(rx.Node):
+class pure_pursuit(rx.Node):  # Inherit from rx.Node
 
     r"""Pure Pursuit example script for SVEA.
 
@@ -42,23 +46,24 @@ class pure_pursuit(rx.Node):
         points: List of points defining the path to follow.
         actuation: Actuation interface for sending control commands.
         localizer: Localization interface for receiving state information.
-        goal_mark: ShowMarker for visualizing the goal.
+        mark: PlaceMarker for visualizing the goal.
         path: ShowPath for visualizing the path.
     """
 
     DELTA_TIME = 0.1
     TRAJ_LEN = 20
 
-    points = rx.Parameter('[[-2.3, -7.1], [10.5, 11.7], [5.7, 15.0], [-7.0, -4.0]]')
+    points = rx.Parameter(['[-2.3, -7.1]', '[10.5, 11.7]', '[5.7, 15.0]', '[-7.0, -4.0]'])
+    state = rx.Parameter([-7.4, -15.3, 0.9, 0.0])  # x, y, yaw, vel
     target_velocity = rx.Parameter(0.6)
     
     # Interfaces
-    
     actuation = ActuationInterface()
     localizer = LocalizationInterface()
-    
-    goal_marker = ShowMarker() # for goal visualization
-    path = ShowPath() # for path visualization
+    # Goal Visualization
+    mark = PlaceMarker()
+    # Path Visualization
+    #path = ShowPath()
 
     def on_startup(self):
         """
@@ -71,8 +76,9 @@ class pure_pursuit(rx.Node):
         The controller is set to not finished initially, and a timer is created
         to call the loop method at regular intervals.
         """
-        # Convert parameter to numerical list
-        self._points = eval(self.points)
+        # Convert POINTS to numerical lists if loaded as strings
+        if isinstance(self.points[0], str):
+            self._points = [eval(point) for point in self.points]
 
         self.controller = PurePursuitController()
         self.controller.target_velocity = self.target_velocity
@@ -82,7 +88,7 @@ class pure_pursuit(rx.Node):
 
         self.curr = 0
         self.goal = self._points[self.curr]
-        self.goal_marker.place([*self.goal, 0.5], color='blue')
+        self.mark.marker('goal','blue',self.goal)
         self.update_traj(x, y)
 
         self.create_timer(self.DELTA_TIME, self.loop)
@@ -104,7 +110,7 @@ class pure_pursuit(rx.Node):
             self.update_traj(x, y)
 
         steering, velocity = self.controller.compute_control(state)
-        # self.get_logger().info(f"Steering: {steering}, Velocity: {velocity}")
+        self.get_logger().info(f"Steering: {steering}, Velocity: {velocity}")
         self.actuation.send_control(steering, velocity)
 
     def update_goal(self):
@@ -118,7 +124,7 @@ class pure_pursuit(rx.Node):
         self.goal = self._points[self.curr]
         self.controller.is_finished = False
         # Mark the goal
-        self.goal_marker.place([*self.goal, 0.5], color='blue')
+        self.mark.marker('goal','blue',self.goal)
 
     def update_traj(self, x, y):
         """
@@ -131,7 +137,7 @@ class pure_pursuit(rx.Node):
         ys = np.linspace(y, self.goal[1], self.TRAJ_LEN)
         self.controller.traj_x = xs
         self.controller.traj_y = ys
-        self.path.publish_path(xs,ys)
+        #self.path.publish_path(xs,ys)
 
 if __name__ == '__main__':
     pure_pursuit.main()

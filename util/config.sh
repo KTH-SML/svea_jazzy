@@ -6,15 +6,10 @@
 # Author: Kaj Munhoz Arfvidsson
 
 ## Uncomment to build base image for amd64 (x86) or arm64.
+## Uncomment to build base image for amd64 (x86) or arm64.
 # BUILD_CONFIG="base-amd64"
 # BUILD_CONFIG="base-arm64"
 
-# # EL2425 - build base image
-# IMAGE_TAG="ghcr.io/kth-sml/svea:el2425-base"
-# BUILD_CONFIG="ghcr"
-
-# EL2425 - normal build
-BUILD_TAG="ghcr.io/kth-sml/svea:el2425-base"
 
 main() {
 
@@ -33,7 +28,6 @@ main() {
     BUILD_CONFIG="$(                        \
         switch "$BUILD_CONFIG"              \
             "host"          "$_host"        \
-            "base"          "base-$_host"   \
             "base-host"     "base-$_host"   \
                             "$BUILD_CONFIG" \
     )"
@@ -47,25 +41,49 @@ main() {
         withdefault IMAGE_PUSH      "0"
     elif [ "$BUILD_CONFIG" = "arm64" ]; then
         withdefault BUILD_PLATFORM  "linux/arm64"
+    if is_arm64; then
+        withdefault BUILD_CONFIG    "arm64"
+    else
+        withdefault BUILD_CONFIG    "host"
+    fi
+
+    if [ "$BUILD_CONFIG" = "host" ]; then
+        # building for host platform
+        withdefault BUILD_PLATFORM  "$(uname -m)"
         withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
         withdefault BUILD_FILE      "docker/Dockerfile"
         withdefault BUILD_TAG       "ghcr.io/kth-sml/svea:latest"
         withdefault IMAGE_TAG       "$REPOSITORY_NAME"
         withdefault IMAGE_PUSH      "0"
+    elif [ "$BUILD_CONFIG" = "arm64" ]; then
+        withdefault BUILD_PLATFORM  "linux/arm64"
+        withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
+        withdefault BUILD_FILE      "docker/Dockerfile"
+        withdefault BUILD_TAG       "ghcr.io/kth-sml/svea:latest"
+        withdefault IMAGE_TAG       "$REPOSITORY_NAME"
+        withdefault IMAGE_PUSH      "0"
+    elif [ "$BUILD_CONFIG" = "base-host-host" ]; then
+        # building for host platform
+        withdefault BUILD_PLATFORM  "$(uname -m)"
+        withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
+        withdefault BUILD_FILE      "docker/Dockerfile.base.base"
+        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base-ros-base"
+        withdefault IMAGE_TAG       "ghcr.io/kth-sml/svea:latest"
+        withdefault IMAGE_PUSH      "0"
     elif [ "$BUILD_CONFIG" = "base-amd64" ]; then
         # building for x86_64
         withdefault BUILD_PLATFORM  "linux/amd64"
         withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
-        withdefault BUILD_FILE      "docker/Dockerfile.base"
-        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base"
+        withdefault BUILD_FILE      "docker/Dockerfile.base.base"
+        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base-ros-base"
         withdefault IMAGE_TAG       "ghcr.io/kth-sml/svea:latest"
         withdefault IMAGE_PUSH      "0"
     elif [ "$BUILD_CONFIG" = "base-arm64" ]; then
         # building for arm64/aarch64/jetson
         withdefault BUILD_PLATFORM  "linux/arm64"
         withdefault BUILD_CONTEXT   "$REPOSITORY_PATH"
-        withdefault BUILD_FILE      "docker/Dockerfile.base"
-        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base"
+        withdefault BUILD_FILE      "docker/Dockerfile.base.base"
+        withdefault BUILD_TAG       "ros:$ROSDISTRO-ros-base-ros-base"
         withdefault IMAGE_TAG       "ghcr.io/kth-sml/svea:latest"
         withdefault IMAGE_PUSH      "0"
     elif [ "$BUILD_CONFIG" = "ghcr" ]; then
@@ -79,10 +97,13 @@ main() {
     else
         echo "Error: Unknown BUILD_CONFIG \"$BUILD_CONFIG\""
         exit 1
+    else
+        echo "Error: Unknown BUILD_CONFIG \"$BUILD_CONFIG\""
+        exit 1
     fi
 
     if [ "$BUILD_FILE" = "docker/Dockerfile.base" ]; then
-        withdefault USER_CREDENTIALS "root:SVEA-Pass!" # TODO: Setup regular user instead of root
+        withdefault USER_CREDENTIALS "svea:SVEA-Pass!" # TODO: Setup regular user instead of root
     fi
 
     withdefault CONTAINER_NAME "$REPOSITORY_NAME"
@@ -127,6 +148,12 @@ jetson_release() {
 # Check if running on macOS (Darwin)
 is_darwin() {
     [ "$(uname -s)" = "Darwin" ]
+}
+
+## Detect arm64 architecture
+is_arm64() {
+    ARCH="$(uname -m)"
+    [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]
 }
 
 ## Detect arm64 architecture

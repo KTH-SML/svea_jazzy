@@ -24,6 +24,6 @@ if [ "$MICROROS_DISABLE_SHM" = "1" ] ; then
 fi
 
 # To build anything that has been added by volume...
-colcon build --symlink-install || true
+colcon build --symlink-install
 
 exec "$@"
