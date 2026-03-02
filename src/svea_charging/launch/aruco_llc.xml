@@ -13,7 +13,7 @@
     <arg name="use_aruco_camera" default="true"/>
     <arg name="aruco_dictionary" default="DICT_4X4_50"/>
     <arg name="aruco_camera_index" default="0"/>
-    <arg name="aruco_marker_length_m" default="0.028"/>
+    <arg name="aruco_marker_length_m" default="0.06"/>
     <arg name="aruco_display" default="false"/>
     <arg name="aruco_loop_hz" default="30.0"/>
     <arg name="aruco_frame_id" default="camera"/>
