@@ -10,7 +10,7 @@ import numpy as np
 import rclpy
 from geometry_msgs.msg import Pose, PoseArray
 from sensor_msgs.msg import CompressedImage
-from std_msgs.msg import Int32MultiArray, String
+from std_msgs.msg import Int32MultiArray, String, Float32
 
 from svea_core import rosonic as rx
 
@@ -203,6 +203,7 @@ class aruco_camera_test(rx.Node):
     poses_pub = rx.Publisher(PoseArray, "aruco/poses")
     status_pub = rx.Publisher(String, "aruco/status")
     debug_image_pub = rx.Publisher(CompressedImage, "aruco/debug_image/compressed")
+    distance_pub = rx.Publisher(Float32, "aruco/distance_m")
 
     def on_startup(self):
         self.cap = None
@@ -438,6 +439,7 @@ class aruco_camera_test(rx.Node):
         self._publish_ids(ids_list)
         self.poses_pub.publish(pose_array)
         self._publish_status(status_text)
+        self.distance_pub.publish(Float32(data=distance_m if ids_list else -1.0))
 
         if bool(self.display) or bool(self.publish_debug_image):
             cv2.putText(

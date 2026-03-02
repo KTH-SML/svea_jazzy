@@ -33,6 +33,7 @@ class stanley_control(rx.Node):
     target_velocity = rx.Parameter(0.4)
     use_aruco_goal = rx.Parameter(True)
     aruco_goal_topic = rx.Parameter("aruco/poses")
+    aruco_pose_is_car_in_marker_frame = rx.Parameter(True)
     aruco_goal_offset = rx.Parameter(0.35)  # stop short of marker center [m]
     # Interfaces
     actuation = ActuationInterface()
@@ -81,8 +82,7 @@ class stanley_control(rx.Node):
             return
 
         pose = msg.poses[0]
-        marker_x_cam = float(pose.position.x)  # +x right in camera frame
-        marker_z_cam = float(pose.position.z)  # +z forward in camera frame
+        marker_x_cam, marker_z_cam = self._marker_in_car_frame_from_pose(pose)
         if marker_z_cam <= 0.0:
             return
 
@@ -99,6 +99,38 @@ class stanley_control(rx.Node):
         mid_y = 0.5 * (car_y + goal_y)
         self.waypoints = [[car_x, car_y], [mid_x, mid_y], self.goal]
         self.reached_goal = False
+
+    def _marker_in_car_frame_from_pose(self, pose):
+        x = float(pose.position.x)
+        y = float(pose.position.y)
+        z = float(pose.position.z)
+
+        if not bool(self.aruco_pose_is_car_in_marker_frame):
+            return x, z
+
+        # Input is assumed T_marker_car; invert to get T_car_marker.
+        qx = float(pose.orientation.x)
+        qy = float(pose.orientation.y)
+        qz = float(pose.orientation.z)
+        qw = float(pose.orientation.w)
+        R = self._quat_to_rot(qx, qy, qz, qw)  # marker <- car
+        t_m_c = np.array([x, y, z], dtype=float)
+        t_c_m = -R.T @ t_m_c
+        return float(t_c_m[0]), float(t_c_m[2])
+
+    def _quat_to_rot(self, qx, qy, qz, qw):
+        n = np.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+        if n < 1e-8:
+            return np.eye(3)
+        qx, qy, qz, qw = qx / n, qy / n, qz / n, qw / n
+        return np.array(
+            [
+                [1.0 - 2.0 * (qy * qy + qz * qz), 2.0 * (qx * qy - qz * qw), 2.0 * (qx * qz + qy * qw)],
+                [2.0 * (qx * qy + qz * qw), 1.0 - 2.0 * (qx * qx + qz * qz), 2.0 * (qy * qz - qx * qw)],
+                [2.0 * (qx * qz - qy * qw), 2.0 * (qy * qz + qx * qw), 1.0 - 2.0 * (qx * qx + qy * qy)],
+            ],
+            dtype=float,
+        )
 
 
     def loop(self):
