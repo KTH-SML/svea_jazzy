@@ -188,7 +188,7 @@ class aruco_camera_test(rx.Node):
     generate_marker_on_startup = rx.Parameter(False)
 
     camera_index = rx.Parameter(0)
-    marker_length_m = rx.Parameter(-1.0)
+    marker_length_m = rx.Parameter(0.05)
     calibration_file = rx.Parameter("")
     focal_length_px = rx.Parameter(-1.0)
     display = rx.Parameter(False)

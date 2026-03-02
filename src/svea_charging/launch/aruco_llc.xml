@@ -37,7 +37,7 @@
     <let name="name" value="self"/>
 
     <!-- Start Svea Core -->
-    <include file="$(find-pkg-share svea_core)/launch/svea_mocap.xml">
+    <include file="$(find-pkg-share svea_core)/launch/svea.xml">
         <arg name="name" value="$(var name)" />
         <arg name="is_sim" value="$(var is_sim)" />
         <arg name="initial_pose_x" value="$(var initial_pose_x)" />
