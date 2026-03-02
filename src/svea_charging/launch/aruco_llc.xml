@@ -4,6 +4,7 @@
     <arg name="map"             default="sml"/>
     <arg name="is_sim"          default="true"/>
     <arg name="use_foxglove"    default="true"/>
+    <arg name="is_indoor"       default="false"/>
     <arg name="initial_pose_x"  default="-2.5"/> <!-- changed-->
     <arg name="initial_pose_y"  default="0.0"/> <!-- changed-->
     <arg name="initial_pose_a"  default="0.0" /> <!-- wrt to map--> <!-- changed-->
@@ -40,6 +41,7 @@
     <include file="$(find-pkg-share svea_core)/launch/svea.xml">
         <arg name="name" value="$(var name)" />
         <arg name="is_sim" value="$(var is_sim)" />
+        <arg name="is_indoor" value="$(var is_indoor)" />
         <arg name="initial_pose_x" value="$(var initial_pose_x)" />
         <arg name="initial_pose_y" value="$(var initial_pose_y)" />
         <arg name="initial_pose_a" value="$(var initial_pose_a)" />

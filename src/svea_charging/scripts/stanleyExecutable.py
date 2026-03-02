@@ -1,16 +1,15 @@
 #! /usr/bin/env python3
 
 import numpy as np
-import ast
 from geometry_msgs.msg import Point
+from geometry_msgs.msg import PoseArray
 from visualization_msgs.msg import Marker
 
 from svea_core.interfaces import LocalizationInterface
 from svea_charging.controllers.stanleyController import StanleyController
 from svea_core.interfaces import ActuationInterface
 from svea_core import rosonic as rx
-from svea_core.interfaces import ShowPath
-from std_msgs.msg import Float32, String
+from std_msgs.msg import Float32
 from rclpy.qos import (
     QoSProfile,
     QoSReliabilityPolicy,
@@ -32,6 +31,9 @@ class stanley_control(rx.Node):
 
     endPoint = rx.Parameter('[2.0, -2.5]') #0.5, -1.2 irl
     target_velocity = rx.Parameter(0.4)
+    use_aruco_goal = rx.Parameter(True)
+    aruco_goal_topic = rx.Parameter("aruco/poses")
+    aruco_goal_offset = rx.Parameter(0.35)  # stop short of marker center [m]
     # Interfaces
     actuation = ActuationInterface()
     localizer = LocalizationInterface()
@@ -71,6 +73,33 @@ class stanley_control(rx.Node):
         self.controller.update_traj(state, self.waypoints)
         self.create_timer(self.DELTA_TIME, self.loop)
 
+    @rx.Subscriber(PoseArray, aruco_goal_topic)
+    def _aruco_goal_cb(self, msg: PoseArray):
+        if not bool(self.use_aruco_goal):
+            return
+        if len(msg.poses) == 0:
+            return
+
+        pose = msg.poses[0]
+        marker_x_cam = float(pose.position.x)  # +x right in camera frame
+        marker_z_cam = float(pose.position.z)  # +z forward in camera frame
+        if marker_z_cam <= 0.0:
+            return
+
+        forward_distance = max(marker_z_cam - float(self.aruco_goal_offset), 0.0)
+        state = self.localizer.get_state()
+        car_x, car_y, car_yaw, _ = state
+
+        # Approximation: camera forward ~= base_link forward.
+        goal_x = car_x + forward_distance * np.cos(car_yaw) - marker_x_cam * np.sin(car_yaw)
+        goal_y = car_y + forward_distance * np.sin(car_yaw) + marker_x_cam * np.cos(car_yaw)
+
+        self.goal = [goal_x, goal_y]
+        mid_x = 0.5 * (car_x + goal_x)
+        mid_y = 0.5 * (car_y + goal_y)
+        self.waypoints = [[car_x, car_y], [mid_x, mid_y], self.goal]
+        self.reached_goal = False
+
 
     def loop(self):
         """
@@ -104,6 +133,7 @@ class stanley_control(rx.Node):
             # Publish errors
             self.publish_errors(x, y, yaw, vel)
             self.dist_to_goal.publish(Float32(data=dist))
+        self.counter += 1
 
     def distance_to_goal(self, state):
         x, y, _, _ = state
