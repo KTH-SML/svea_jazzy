@@ -29,12 +29,19 @@ qos_pubber = QoSProfile(
 class stanley_control(rx.Node):
     DELTA_TIME = 0.1
 
-    endPoint = rx.Parameter('[2.0, -2.5]') #0.5, -1.2 irl
+    endPoint = rx.Parameter('[5.0, 2.5]') #0.5, -1.2 irl
     target_velocity = rx.Parameter(0.4)
     use_aruco_goal = rx.Parameter(True)
     aruco_goal_topic = rx.Parameter("aruco/poses")
     aruco_pose_is_car_in_marker_frame = rx.Parameter(True)
     aruco_goal_offset = rx.Parameter(0.35)  # stop short of marker center [m]
+    aruco_goal_blend_alpha = rx.Parameter(0.25)  # EMA gain for marker position in map
+    aruco_max_marker_jump = rx.Parameter(0.8)  # [m] reject large frame-to-frame jumps
+    aruco_measurement_timeout = rx.Parameter(0.8)  # [s] marker freshness window
+    aruco_min_forward_distance = rx.Parameter(0.05)  # [m]
+    aruco_max_forward_distance = rx.Parameter(6.0)  # [m]
+    aruco_max_lateral_distance = rx.Parameter(2.5)  # [m]
+    aruco_goal_update_eps = rx.Parameter(0.03)  # [m] deadband to avoid jitter
     # Interfaces
     actuation = ActuationInterface()
     localizer = LocalizationInterface()
@@ -53,6 +60,8 @@ class stanley_control(rx.Node):
     def on_startup(self):
         self.reached_goal = False
         self.counter = 0
+        self.filtered_marker_map = None
+        self.last_marker_update_s = None
 
         self.controller = StanleyController()
         self.controller.target_velocity = self.target_velocity
@@ -83,22 +92,30 @@ class stanley_control(rx.Node):
 
         pose = msg.poses[0]
         marker_x_cam, marker_z_cam = self._marker_in_car_frame_from_pose(pose)
-        if marker_z_cam <= 0.0:
+        if not np.isfinite(marker_x_cam) or not np.isfinite(marker_z_cam):
+            return
+        if marker_z_cam < float(self.aruco_min_forward_distance):
+            return
+        if marker_z_cam > float(self.aruco_max_forward_distance):
+            return
+        if abs(marker_x_cam) > float(self.aruco_max_lateral_distance):
             return
 
-        forward_distance = max(marker_z_cam - float(self.aruco_goal_offset), 0.0)
         state = self.localizer.get_state()
         car_x, car_y, car_yaw, _ = state
+        marker_map = self._car_frame_point_to_map(car_x, car_y, car_yaw, marker_z_cam, marker_x_cam)
 
-        # Approximation: camera forward ~= base_link forward.
-        goal_x = car_x + forward_distance * np.cos(car_yaw) - marker_x_cam * np.sin(car_yaw)
-        goal_y = car_y + forward_distance * np.sin(car_yaw) + marker_x_cam * np.cos(car_yaw)
+        if self.filtered_marker_map is None:
+            self.filtered_marker_map = marker_map
+        else:
+            innovation = np.linalg.norm(marker_map - self.filtered_marker_map)
+            if innovation > float(self.aruco_max_marker_jump):
+                return
+            alpha = float(np.clip(self.aruco_goal_blend_alpha, 0.0, 1.0))
+            self.filtered_marker_map = (1.0 - alpha) * self.filtered_marker_map + alpha * marker_map
 
-        self.goal = [goal_x, goal_y]
-        mid_x = 0.5 * (car_x + goal_x)
-        mid_y = 0.5 * (car_y + goal_y)
-        self.waypoints = [[car_x, car_y], [mid_x, mid_y], self.goal]
-        self.reached_goal = False
+        self.last_marker_update_s = self._now_s()
+        self._update_goal_from_filtered_marker(state)
 
     def _marker_in_car_frame_from_pose(self, pose):
         x = float(pose.position.x)
@@ -117,6 +134,45 @@ class stanley_control(rx.Node):
         t_m_c = np.array([x, y, z], dtype=float)
         t_c_m = -R.T @ t_m_c
         return float(t_c_m[0]), float(t_c_m[2])
+
+    def _car_frame_point_to_map(self, car_x, car_y, car_yaw, forward_m, left_m):
+        dx = forward_m * np.cos(car_yaw) - left_m * np.sin(car_yaw)
+        dy = forward_m * np.sin(car_yaw) + left_m * np.cos(car_yaw)
+        return np.array([car_x + dx, car_y + dy], dtype=float)
+
+    def _now_s(self):
+        now = self.get_clock().now().nanoseconds
+        return float(now) * 1e-9
+
+    def _has_fresh_marker(self):
+        if self.filtered_marker_map is None or self.last_marker_update_s is None:
+            return False
+        return (self._now_s() - self.last_marker_update_s) <= float(self.aruco_measurement_timeout)
+
+    def _update_goal_from_filtered_marker(self, state):
+        if self.filtered_marker_map is None:
+            return
+
+        car_x, car_y, _, _ = state
+        car_xy = np.array([car_x, car_y], dtype=float)
+        to_marker = self.filtered_marker_map - car_xy
+        marker_dist = np.linalg.norm(to_marker)
+        if marker_dist < 1e-6:
+            return
+
+        approach_dist = max(marker_dist - float(self.aruco_goal_offset), 0.0)
+        goal_xy = car_xy + (to_marker / marker_dist) * approach_dist
+
+        if hasattr(self, "goal"):
+            prev_goal = np.array(self.goal, dtype=float)
+            if np.linalg.norm(goal_xy - prev_goal) < float(self.aruco_goal_update_eps):
+                return
+
+        self.goal = [float(goal_xy[0]), float(goal_xy[1])]
+        mid_x = 0.5 * (car_x + self.goal[0])
+        mid_y = 0.5 * (car_y + self.goal[1])
+        self.waypoints = [[car_x, car_y], [mid_x, mid_y], self.goal]
+        self.reached_goal = False
 
     def _quat_to_rot(self, qx, qy, qz, qw):
         n = np.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
@@ -140,6 +196,9 @@ class stanley_control(rx.Node):
         state = self.localizer.get_state()
         x, y, yaw, vel = state
 
+        if bool(self.use_aruco_goal) and self._has_fresh_marker():
+            self._update_goal_from_filtered_marker(state)
+
         dist = self.distance_to_goal(state)
         if dist <= self.goal_tolerance:
             if not self.reached_goal:
@@ -158,7 +217,7 @@ class stanley_control(rx.Node):
         self.actuation.send_control(steering, velocity)
         
 
-        if self.counter % 10 == 0: # publish markers every 1 seconds
+        if self.counter % 5 == 0: # publish markers every .5 seconds
             self.publish_goal_marker(self.goal)
             self.publish_waypoints_marker(self.waypoints)
             self.publish_trajectory_marker(self.controller.cx, self.controller.cy)
