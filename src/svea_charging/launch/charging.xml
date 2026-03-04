@@ -34,7 +34,7 @@
         <arg name="use_foxglove" value="$(var use_foxglove)" />
     </include>   
     
-    <let name="name" value="self"/>
+    <let name="name" value="svea67"/>
 
     <!-- Start Svea Core -->
     <include file="$(find-pkg-share svea_core)/launch/svea_mocap.xml">

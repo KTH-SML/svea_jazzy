@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
     <!-- Launch file arguments -->
-    <arg name="map"             default="itrl"/>
+    <arg name="map"             default="sml"/>
     <arg name="is_sim"          default="true"/>
     <arg name="use_foxglove"    default="true"/>
     <arg name="is_indoor"       default="false"/>
@@ -35,10 +35,10 @@
         <arg name="use_foxglove" value="$(var use_foxglove)" />
     </include>   
     
-    <let name="name" value="self"/>
+    <let name="name" value="svea67"/>
 
     <!-- Start Svea Core -->
-    <include file="$(find-pkg-share svea_core)/launch/svea.xml">
+    <include file="$(find-pkg-share svea_core)/launch/svea_mocap.xml">
         <arg name="name" value="$(var name)" />
         <arg name="is_sim" value="$(var is_sim)" />
         <arg name="is_indoor" value="$(var is_indoor)" />

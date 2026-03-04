@@ -104,12 +104,19 @@ class StanleyController:
         :param last_target_idx: (int)
         :return: (float, int)
         """
+        if not cx or not cy or not cyaw:
+            raise ValueError("Stanley path is empty; cannot compute steering.")
+
         current_target_idx, error_front_axle = self.calc_target_index(cx, cy)
         self.cross_track_error = error_front_axle # for providing output to external
 
 
         if last_target_idx >= current_target_idx:
             current_target_idx = last_target_idx
+
+        # Path can be rebuilt every loop; keep stale indices within bounds.
+        max_idx = min(len(cx), len(cy), len(cyaw)) - 1
+        current_target_idx = int(np.clip(current_target_idx, 0, max_idx))
 
         # theta_e corrects the heading error
         theta_e = self.normalize_angle(cyaw[current_target_idx] - self.yaw)
@@ -142,6 +149,9 @@ class StanleyController:
         :param cy: [float]
         :return: (int, float)
         """
+        if not cx or not cy:
+            raise ValueError("Stanley path is empty; cannot compute target index.")
+
         # Calc front axle position
         fx = self.x + L * np.cos(self.yaw)
         fy = self.y + L * np.sin(self.yaw)
@@ -183,6 +193,12 @@ class StanleyController:
 
         self.cx, self.cy, self.cyaw, self.ck, self.s = cubic_spline_planner.calc_spline_course(
             self.ax, self.ay, ds=0.2)
+
+        # Keep target index valid when trajectory size changes.
+        if self.cx:
+            self.target_idx = int(np.clip(self.target_idx, 0, len(self.cx) - 1))
+        else:
+            self.target_idx = 0
 
 
     def compute_steering(self):

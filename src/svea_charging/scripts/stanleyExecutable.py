@@ -29,19 +29,13 @@ qos_pubber = QoSProfile(
 class stanley_control(rx.Node):
     DELTA_TIME = 0.1
 
-    endPoint = rx.Parameter('[5.0, 2.5]') #0.5, -1.2 irl
+    endPoint = rx.Parameter('[1.360, 1.382]') #x= -1.360,y=  1.382, yaw = 90deg
     target_velocity = rx.Parameter(0.4)
-    use_aruco_goal = rx.Parameter(True)
+    use_aruco_goal = rx.Parameter(False)
     aruco_goal_topic = rx.Parameter("aruco/poses")
     aruco_pose_is_car_in_marker_frame = rx.Parameter(True)
     aruco_goal_offset = rx.Parameter(0.35)  # stop short of marker center [m]
-    aruco_goal_blend_alpha = rx.Parameter(0.25)  # EMA gain for marker position in map
-    aruco_max_marker_jump = rx.Parameter(0.8)  # [m] reject large frame-to-frame jumps
-    aruco_measurement_timeout = rx.Parameter(0.8)  # [s] marker freshness window
-    aruco_min_forward_distance = rx.Parameter(0.05)  # [m]
-    aruco_max_forward_distance = rx.Parameter(6.0)  # [m]
-    aruco_max_lateral_distance = rx.Parameter(2.5)  # [m]
-    aruco_goal_update_eps = rx.Parameter(0.03)  # [m] deadband to avoid jitter
+    aruco_distance_topic = rx.Parameter("aruco/distance_m") # distance to aruco marker, updated by subscriber
     # Interfaces
     actuation = ActuationInterface()
     localizer = LocalizationInterface()
@@ -57,11 +51,47 @@ class stanley_control(rx.Node):
     dist_to_goal = rx.Publisher(Float32, 'dist_to_goal', qos_pubber)
 
 
+    @rx.Subscriber(Float32, aruco_distance_topic)
+    def _aruco_distance_cb(self, msg: Float32):
+        if not bool(self.use_aruco_goal):
+            return
+        self.aruco_distance = msg.data
+
+    @rx.Subscriber(PoseArray, aruco_goal_topic)
+    def _aruco_goal_cb(self, msg: PoseArray):
+        if not bool(self.use_aruco_goal):
+            return
+        if len(msg.poses) == 0:
+            #self.get_logger().warn("No Aruco markers detected, cannot update goal")
+            return
+
+        pose = msg.poses[0]
+        aruco_x = pose.position.x
+        aruco_y = pose.position.z
+        thetaAruco = pose.orientation.y
+        aruco_x_rel = self.aruco_distance * np.cos(thetaAruco)
+        aruco_y_rel = self.aruco_distance * np.sin(thetaAruco)
+
+        state = self.localizer.get_state()
+        x, y, yaw, vel = state
+
+        aruco_vec = np.array([aruco_x_rel, aruco_y_rel])
+        car_vec = np.array([x, y])
+        A = np.array([[np.cos(yaw), -np.sin(yaw)],
+                      [np.sin(yaw), np.cos(yaw)]])
+        aruco_in_map = car_vec + A @ aruco_vec
+
+       
+        self.goal = [aruco_in_map[0], aruco_in_map[1]]
+        mid_x = 0.5 * (x + aruco_in_map[0])
+        mid_y = 0.5 * (y + aruco_in_map[1])
+        self.waypoints = [[x, y], [mid_x, mid_y], self.goal]
+        self.reached_goal = False
+
+
     def on_startup(self):
         self.reached_goal = False
         self.counter = 0
-        self.filtered_marker_map = None
-        self.last_marker_update_s = None
 
         self.controller = StanleyController()
         self.controller.target_velocity = self.target_velocity
@@ -83,111 +113,6 @@ class stanley_control(rx.Node):
         self.controller.update_traj(state, self.waypoints)
         self.create_timer(self.DELTA_TIME, self.loop)
 
-    @rx.Subscriber(PoseArray, aruco_goal_topic)
-    def _aruco_goal_cb(self, msg: PoseArray):
-        if not bool(self.use_aruco_goal):
-            return
-        if len(msg.poses) == 0:
-            return
-
-        pose = msg.poses[0]
-        marker_x_cam, marker_z_cam = self._marker_in_car_frame_from_pose(pose)
-        if not np.isfinite(marker_x_cam) or not np.isfinite(marker_z_cam):
-            return
-        if marker_z_cam < float(self.aruco_min_forward_distance):
-            return
-        if marker_z_cam > float(self.aruco_max_forward_distance):
-            return
-        if abs(marker_x_cam) > float(self.aruco_max_lateral_distance):
-            return
-
-        state = self.localizer.get_state()
-        car_x, car_y, car_yaw, _ = state
-        marker_map = self._car_frame_point_to_map(car_x, car_y, car_yaw, marker_z_cam, marker_x_cam)
-
-        if self.filtered_marker_map is None:
-            self.filtered_marker_map = marker_map
-        else:
-            innovation = np.linalg.norm(marker_map - self.filtered_marker_map)
-            if innovation > float(self.aruco_max_marker_jump):
-                return
-            alpha = float(np.clip(self.aruco_goal_blend_alpha, 0.0, 1.0))
-            self.filtered_marker_map = (1.0 - alpha) * self.filtered_marker_map + alpha * marker_map
-
-        self.last_marker_update_s = self._now_s()
-        self._update_goal_from_filtered_marker(state)
-
-    def _marker_in_car_frame_from_pose(self, pose):
-        x = float(pose.position.x)
-        y = float(pose.position.y)
-        z = float(pose.position.z)
-
-        if not bool(self.aruco_pose_is_car_in_marker_frame):
-            return x, z
-
-        # Input is assumed T_marker_car; invert to get T_car_marker.
-        qx = float(pose.orientation.x)
-        qy = float(pose.orientation.y)
-        qz = float(pose.orientation.z)
-        qw = float(pose.orientation.w)
-        R = self._quat_to_rot(qx, qy, qz, qw)  # marker <- car
-        t_m_c = np.array([x, y, z], dtype=float)
-        t_c_m = -R.T @ t_m_c
-        return float(t_c_m[0]), float(t_c_m[2])
-
-    def _car_frame_point_to_map(self, car_x, car_y, car_yaw, forward_m, left_m):
-        dx = forward_m * np.cos(car_yaw) - left_m * np.sin(car_yaw)
-        dy = forward_m * np.sin(car_yaw) + left_m * np.cos(car_yaw)
-        return np.array([car_x + dx, car_y + dy], dtype=float)
-
-    def _now_s(self):
-        now = self.get_clock().now().nanoseconds
-        return float(now) * 1e-9
-
-    def _has_fresh_marker(self):
-        if self.filtered_marker_map is None or self.last_marker_update_s is None:
-            return False
-        return (self._now_s() - self.last_marker_update_s) <= float(self.aruco_measurement_timeout)
-
-    def _update_goal_from_filtered_marker(self, state):
-        if self.filtered_marker_map is None:
-            return
-
-        car_x, car_y, _, _ = state
-        car_xy = np.array([car_x, car_y], dtype=float)
-        to_marker = self.filtered_marker_map - car_xy
-        marker_dist = np.linalg.norm(to_marker)
-        if marker_dist < 1e-6:
-            return
-
-        approach_dist = max(marker_dist - float(self.aruco_goal_offset), 0.0)
-        goal_xy = car_xy + (to_marker / marker_dist) * approach_dist
-
-        if hasattr(self, "goal"):
-            prev_goal = np.array(self.goal, dtype=float)
-            if np.linalg.norm(goal_xy - prev_goal) < float(self.aruco_goal_update_eps):
-                return
-
-        self.goal = [float(goal_xy[0]), float(goal_xy[1])]
-        mid_x = 0.5 * (car_x + self.goal[0])
-        mid_y = 0.5 * (car_y + self.goal[1])
-        self.waypoints = [[car_x, car_y], [mid_x, mid_y], self.goal]
-        self.reached_goal = False
-
-    def _quat_to_rot(self, qx, qy, qz, qw):
-        n = np.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
-        if n < 1e-8:
-            return np.eye(3)
-        qx, qy, qz, qw = qx / n, qy / n, qz / n, qw / n
-        return np.array(
-            [
-                [1.0 - 2.0 * (qy * qy + qz * qz), 2.0 * (qx * qy - qz * qw), 2.0 * (qx * qz + qy * qw)],
-                [2.0 * (qx * qy + qz * qw), 1.0 - 2.0 * (qx * qx + qz * qz), 2.0 * (qy * qz - qx * qw)],
-                [2.0 * (qx * qz - qy * qw), 2.0 * (qy * qz + qx * qw), 1.0 - 2.0 * (qx * qx + qy * qy)],
-            ],
-            dtype=float,
-        )
-
 
     def loop(self):
         """
@@ -195,9 +120,6 @@ class stanley_control(rx.Node):
         """
         state = self.localizer.get_state()
         x, y, yaw, vel = state
-
-        if bool(self.use_aruco_goal) and self._has_fresh_marker():
-            self._update_goal_from_filtered_marker(state)
 
         dist = self.distance_to_goal(state)
         if dist <= self.goal_tolerance:
