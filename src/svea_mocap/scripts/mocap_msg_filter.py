@@ -57,7 +57,7 @@ class MocapToPose(rx.Node):
     @rx.Subscriber(RigidBodies, mocap_topic, qos_profile=qos_subber)
     def _rigid_bodies_pose_cb(self, msg: RigidBodies) -> None:
         for rigid_body in msg.rigidbodies:
-            if rigid_body.rigid_body_name == "svea":
+            if rigid_body.rigid_body_name == "svea67":
                 self._svea_pose_msg.header = msg.header
                 self._svea_pose_msg.pose.pose = rigid_body.pose
                 self.mocap_svea_pub.publish(self._svea_pose_msg)

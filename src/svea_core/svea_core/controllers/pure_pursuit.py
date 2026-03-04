@@ -26,8 +26,8 @@ class PurePursuitController:
         dt: Time step for control updates, default is 0.01 seconds.
     """
 
-    k = 0.1  # look forward gain
-    Lfc = 0.6  # look-ahead distance
+    k = 0.3  # look forward gain
+    Lfc = 0.4  # look-ahead distance
     K_p = 0.15  # speed control propotional gain
     K_i = 0.01  # speed control integral gain
     

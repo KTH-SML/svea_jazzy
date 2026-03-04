@@ -6,8 +6,8 @@ from geometry_msgs.msg import PoseArray
 from visualization_msgs.msg import Marker
 
 from svea_core.interfaces import LocalizationInterface
-from svea_charging.controllers.stanleyController import StanleyController
-from svea_core.interfaces import ActuationInterface
+from svea_core.controllers.pure_pursuit import PurePursuitController
+from svea_core.interfaces import ActuationInterface, ShowMarker, ShowPath
 from svea_core import rosonic as rx
 from std_msgs.msg import Float32
 from rclpy.qos import (
@@ -26,8 +26,9 @@ qos_pubber = QoSProfile(
     depth=1,
 )
 
-class stanley_control(rx.Node):
+class pure_pursuit(rx.Node):
     DELTA_TIME = 0.1
+    TRAJ_LEN = 20
 
     endPoint = rx.Parameter('[1.885, 1.348]') #x= -1.360,y=  1.382, yaw = 90deg
     target_velocity = rx.Parameter(0.7)
@@ -39,14 +40,16 @@ class stanley_control(rx.Node):
     # Interfaces
     actuation = ActuationInterface()
     localizer = LocalizationInterface()
-    goal_tolerance = rx.Parameter(0.2) #m
+    goal_tolerance = rx.Parameter(0.05) #m
+
+    goal_marker = ShowMarker() # for goal visualization
+    path = ShowPath() # for path visualization
+
 
     #Publishers
     goal_pub = rx.Publisher(Marker, 'goal_marker', qos_pubber)
     path_pub = rx.Publisher(Marker, 'path_marker', qos_pubber)
     traj_pub = rx.Publisher(Marker, 'traj_marker', qos_pubber)
-    cross_track_error_pub = rx.Publisher(Float32, 'cross_track_error', qos_pubber)
-    yaw_error_pub = rx.Publisher(Float32, 'yaw_error', qos_pubber)
     velocity_error_pub = rx.Publisher(Float32, 'velocity_error', qos_pubber)
     dist_to_goal = rx.Publisher(Float32, 'dist_to_goal', qos_pubber)
 
@@ -93,7 +96,7 @@ class stanley_control(rx.Node):
         self.reached_goal = False
         self.counter = 0
 
-        self.controller = StanleyController()
+        self.controller = PurePursuitController()
         self.controller.target_velocity = self.target_velocity
 
         import time
@@ -107,10 +110,11 @@ class stanley_control(rx.Node):
         self.waypoints = [[x, y], [mx, my], self.goal]
         
         #publish goal and waypoints
-        #self.publish_goal_marker(self.goal)
+        self.publish_goal_marker(self.goal)
+
         #self.publish_waypoints_marker(self.waypoints)
 
-        self.controller.update_traj(state, self.waypoints)
+        self.update_traj(x, y)
         self.create_timer(self.DELTA_TIME, self.loop)
 
 
@@ -128,10 +132,7 @@ class stanley_control(rx.Node):
                 self.reached_goal = True
 
         #self.update_goal()
-        # mx = 0.5*(x + self.goal[0])
-        # my = 0.5*(y + self.goal[1])
-        # self.waypoints = [[x, y], [mx, my], self.goal]
-        self.controller.update_traj(state, self.waypoints)
+        self.update_traj(x, y)
 
         if not self.reached_goal:
             steering, velocity = self.controller.compute_control(state)
@@ -144,8 +145,8 @@ class stanley_control(rx.Node):
 
         if self.counter % 5 == 0: # publish markers every .5 seconds
             self.publish_goal_marker(self.goal)
-            self.publish_waypoints_marker(self.waypoints)
-            self.publish_trajectory_marker(self.controller.cx, self.controller.cy)
+            # self.publish_waypoints_marker(self.waypoints)
+            # self.publish_trajectory_marker(self.controller.cx, self.controller.cy)
             # Publish errors
             self.publish_errors(x, y, yaw, vel)
             self.dist_to_goal.publish(Float32(data=dist))
@@ -243,14 +244,22 @@ class stanley_control(rx.Node):
         self.traj_pub.publish(msg)
 
     def publish_errors(self, x, y, yaw, vel):
-        self.cross_track_error_pub.publish(Float32(data=self.controller.cross_track_error)) #m
-        self.yaw_error_pub.publish(Float32(data=np.rad2deg(self.controller.yaw_error))) #degrees
-
         # Velocity error
         vel_err = self.controller.target_velocity - vel
         self.velocity_error_pub.publish(Float32(data=vel_err))
 
-
+    def update_traj(self, x, y):
+        """
+        Update the trajectory based on the current state and the goal. It
+        generates a linear trajectory from the current position to the goal
+        position, and updates the controller's trajectory points.
+        The trajectory is visualized using the ShowPath interface.
+        """
+        xs = np.linspace(x, self.goal[0], self.TRAJ_LEN)
+        ys = np.linspace(y, self.goal[1], self.TRAJ_LEN)
+        self.controller.traj_x = xs
+        self.controller.traj_y = ys
+        self.path.publish_path(xs,ys)
 
 if __name__ == '__main__':
-    stanley_control.main()
+    pure_pursuit.main()
