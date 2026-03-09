@@ -139,14 +139,8 @@ class sim_lidar(rx.Node):
         self._scan_msg.range_min = self.RANGE_MIN
         self._scan_msg.range_max = self.RANGE_MAX
 
-        self._obstacles = self.load_param('obstacles', '[]')
-        try:
-            self._obstacles = ast.literal_eval(self._obstacles)
-        except (ValueError, SyntaxError):
-            self.get_logger().warning(
-                "Invalid 'obstacles' parameter; falling back to empty obstacle list."
-            )
-            self._obstacles = []
+        self._obstacles = self.load_param('obstacles', '')
+        self._obstacles = ast.literal_eval(self._obstacles) 
 
         self.tf_broadcaster = TransformBroadcaster(self)
 
