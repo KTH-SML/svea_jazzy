@@ -17,7 +17,7 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 from svea_charging.third_party.PythonRobotics.PathPlanning.CubicSpline import cubic_spline_planner
 
 # Parameters
-k = .2  # control gain
+k = .01  # control gain
 Kp = 1.5  # speed proportional gain
 dt = 0.1  # [s] time difference
 L = 0.2  # [m] Wheel base of vehicle (TODO: check this value)

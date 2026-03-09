@@ -49,7 +49,7 @@ class MocapToPose(rx.Node):
         self.get_logger().info("Starting Mocap interface Node...")
         self.get_logger().info("Mocap is ready.")
 
-        self.create_timer(2.0, self._timer_callback)
+        self.create_timer(0.1, self._timer_callback)
         
     def _timer_callback(self):
         self.initial_pose = False

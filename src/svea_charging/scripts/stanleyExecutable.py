@@ -29,7 +29,7 @@ qos_pubber = QoSProfile(
 class stanley_control(rx.Node):
     DELTA_TIME = 0.1
 
-    endPoint = rx.Parameter('[1.885, 1.348]') #x= -1.885,y=  1.348, yaw = 90deg
+    endPoint = rx.Parameter('[1.885, 1.355]') #x= -1.885,y=  1.348, yaw = 90deg
     target_velocity = rx.Parameter(0.4)
     use_aruco_goal = rx.Parameter(False)
     aruco_goal_topic = rx.Parameter("aruco/poses")
@@ -97,7 +97,7 @@ class stanley_control(rx.Node):
         self.controller.target_velocity = self.target_velocity
 
         import time
-        time.sleep(8) # wait for localization to start up and get first state
+        time.sleep(8.0) # wait for localization to start up and get first state
         state = self.localizer.get_state()
         x, y, yaw, vel = state
 

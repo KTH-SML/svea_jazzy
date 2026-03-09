@@ -27,7 +27,7 @@ class imu_bias_remove(rx.Node):
     """
 
     bias_sampled = False
-    sample_count = 100
+    sample_count = 50
     sample_counter = 0
 
     frame_id = rx.Parameter('imu')

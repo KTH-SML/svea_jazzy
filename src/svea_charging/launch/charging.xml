@@ -35,11 +35,11 @@
     </include>   
     
     <!-- should be svea67 if not in simulation -->
-    <let name="name" value="self"/> 
+    <let name="name" value="svea67"/> 
     
 
     <!-- Start Svea Core -->
-    <include file="$(find-pkg-share svea_core)/launch/svea.xml">
+    <include file="$(find-pkg-share svea_core)/launch/svea_mocap.xml">
         <arg name="name" value="$(var name)" />
         <arg name="is_sim" value="$(var is_sim)" />
         <!-- <arg name="is_indoor" value="$(var is_indoor)" /> -->

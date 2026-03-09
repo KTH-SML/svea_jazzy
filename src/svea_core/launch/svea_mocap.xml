@@ -62,12 +62,12 @@
             <param name="frame_id"    value="$(var name)/imu"/>
         </node>
 
-        <node pkg="svea_core" exec="lidar_timer.py" name="lidar_timer" output="screen">
+        <!-- <node pkg="svea_core" exec="lidar_timer.py" name="lidar_timer" output="screen">
             <param name="target_frame" value="$(var name)/base_link"/>
             <param name="source_frame" value="$(var name)/odom"/>
             <param name="from_topic"   value="$(var name)/scan"/>
             <param name="to_topic"     value="$(var name)/scan/filtered"/>
-        </node>
+        </node> -->
     </group>
 
     <!-- Load Visualization Model -->
