@@ -34,10 +34,12 @@
         <arg name="use_foxglove" value="$(var use_foxglove)" />
     </include>   
     
-    <let name="name" value="svea67"/>
+    <!-- should be svea67 if not in simulation -->
+    <let name="name" value="self"/> 
+    
 
     <!-- Start Svea Core -->
-    <include file="$(find-pkg-share svea_core)/launch/svea_mocap.xml">
+    <include file="$(find-pkg-share svea_core)/launch/svea.xml">
         <arg name="name" value="$(var name)" />
         <arg name="is_sim" value="$(var is_sim)" />
         <!-- <arg name="is_indoor" value="$(var is_indoor)" /> -->

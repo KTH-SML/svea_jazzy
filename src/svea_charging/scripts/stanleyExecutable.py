@@ -29,7 +29,7 @@ qos_pubber = QoSProfile(
 class stanley_control(rx.Node):
     DELTA_TIME = 0.1
 
-    endPoint = rx.Parameter('[1.885, 1.348]') #x= -1.360,y=  1.382, yaw = 90deg
+    endPoint = rx.Parameter('[-1.885, 1.348]') #x= -1.885,y=  1.348, yaw = 90deg
     target_velocity = rx.Parameter(0.7)
     use_aruco_goal = rx.Parameter(False)
     aruco_goal_topic = rx.Parameter("aruco/poses")
@@ -85,7 +85,7 @@ class stanley_control(rx.Node):
         self.goal = [aruco_in_map[0], aruco_in_map[1]]
         mid_x = 0.5 * (x + aruco_in_map[0])
         mid_y = 0.5 * (y + aruco_in_map[1])
-        self.waypoints = [[x, y], [mid_x, mid_y], self.goal]
+        self.waypoints = [[mid_x, mid_y], self.goal]
         self.reached_goal = False
 
 
@@ -104,7 +104,7 @@ class stanley_control(rx.Node):
         self.goal = eval(self.endPoint)
         mx = 0.5*(x + self.goal[0])
         my = 0.5*(y + self.goal[1])
-        self.waypoints = [[x, y], [mx, my], self.goal]
+        self.waypoints = [[mx, my], self.goal]
         
         #publish goal and waypoints
         #self.publish_goal_marker(self.goal)
@@ -128,9 +128,9 @@ class stanley_control(rx.Node):
                 self.reached_goal = True
 
         #self.update_goal()
-        # mx = 0.5*(x + self.goal[0])
-        # my = 0.5*(y + self.goal[1])
-        # self.waypoints = [[x, y], [mx, my], self.goal]
+        mx = 0.5*(x + self.goal[0])
+        my = 0.5*(y + self.goal[1])
+        self.waypoints = [[mx, my], self.goal]
         self.controller.update_traj(state, self.waypoints)
 
         if not self.reached_goal:
