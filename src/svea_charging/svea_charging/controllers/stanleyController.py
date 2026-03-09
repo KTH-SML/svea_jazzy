@@ -172,30 +172,27 @@ class StanleyController:
 
     def update_traj(self, state, waypoints):
         x, y, yaw, v = state
-        raw_points = [(x, y)] + [(p[0], p[1]) for p in waypoints]
+        #assuming waypoints list of (x, y) tuples
+        '''
+        #this takes the first two waypoints only
+        first_wp, second_wp = waypoints[0], waypoints[1]
+        first_wp_x, first_wp_y = first_wp
+        second_wp_x, second_wp_y = second_wp
 
-        # Remove consecutive duplicates to avoid zero-length spline segments (h[i] == 0).
-        deduped_points = [raw_points[0]]
-        for px, py in raw_points[1:]:
-            prev_x, prev_y = deduped_points[-1]
-            if np.hypot(px - prev_x, py - prev_y) > 1e-6:
-                deduped_points.append((px, py))
+        self.ax = [x, first_wp_x, second_wp_x]
+        self.ay = [y, first_wp_y, second_wp_y]
+        '''
+        '''
+        for point in waypoints:
+            self.ax.append(point[0])
+            self.ay.append(point[1])'''
+        #added to reduce time lag
+        self.ax = [x] + [p[0] for p in waypoints]
+        self.ay = [y] + [p[1] for p in waypoints]
 
-        if len(deduped_points) < 2:
-            return
 
-        self.ax = [p[0] for p in deduped_points]
-        self.ay = [p[1] for p in deduped_points]
-
-        cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(
+        self.cx, self.cy, self.cyaw, self.ck, self.s = cubic_spline_planner.calc_spline_course(
             self.ax, self.ay, ds=0.2)
-
-        if (not np.all(np.isfinite(cx)) or
-                not np.all(np.isfinite(cy)) or
-                not np.all(np.isfinite(cyaw))):
-            return
-
-        self.cx, self.cy, self.cyaw, self.ck, self.s = cx, cy, cyaw, ck, s
 
         # Keep target index valid when trajectory size changes.
         if self.cx:

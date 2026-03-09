@@ -29,8 +29,8 @@ qos_pubber = QoSProfile(
 class stanley_control(rx.Node):
     DELTA_TIME = 0.1
 
-    endPoint = rx.Parameter('[-1.885, 1.348]') #x= -1.885,y=  1.348, yaw = 90deg
-    target_velocity = rx.Parameter(0.7)
+    endPoint = rx.Parameter('[1.885, 1.348]') #x= -1.885,y=  1.348, yaw = 90deg
+    target_velocity = rx.Parameter(0.4)
     use_aruco_goal = rx.Parameter(False)
     aruco_goal_topic = rx.Parameter("aruco/poses")
     aruco_pose_is_car_in_marker_frame = rx.Parameter(True)
