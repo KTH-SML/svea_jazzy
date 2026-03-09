@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import pathlib
+from svea_core import rosonic as rx
 
 from svea_core.interfaces import LocalizationInterface
 
@@ -17,7 +18,7 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 from svea_charging.third_party.PythonRobotics.PathPlanning.CubicSpline import cubic_spline_planner
 
 # Parameters
-k = .01  # control gain
+k = 2.0 # control gain
 Kp = 1.5  # speed proportional gain
 dt = 0.1  # [s] time difference
 L = 0.2  # [m] Wheel base of vehicle (TODO: check this value)
@@ -38,7 +39,7 @@ class StanleyController:
     :param v: (float) speed
     """
 
-    def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
+    def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0, node: rx.Node = None):
         """Instantiate the object."""
         super().__init__()
         self.x = x
@@ -61,6 +62,7 @@ class StanleyController:
 
         self.cross_track_error = 0.0
         self.yaw_error = 0.0
+        self.node = node
 
     def update(self, state):
         """
@@ -122,9 +124,11 @@ class StanleyController:
         theta_e = self.normalize_angle(cyaw[current_target_idx] - self.yaw)
         self.yaw_error = theta_e # for providing output to external
         # theta_d corrects the cross track error
-        theta_d = np.arctan2(k * error_front_axle, self.v)
+        theta_d = np.arctan2(k * error_front_axle, max(self.v, 0.4))# added division to reduce steering angle for better stability at low speeds
+        self.node.get_logger().info(f"Theta_e: {theta_e}, Theta_d: {theta_d}")
         # Steering control
         delta = theta_e + theta_d
+        # delta = theta_e
 
         return delta, current_target_idx
 
@@ -216,7 +220,7 @@ class StanleyController:
 
     def compute_control(self, state):
         self.update(state)
-        steering = self.compute_steering()
+        steering = self.compute_steering() + np.deg2rad(16)
         velocity = self.compute_velocity()
         
 

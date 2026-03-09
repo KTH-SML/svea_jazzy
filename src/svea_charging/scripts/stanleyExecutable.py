@@ -27,9 +27,9 @@ qos_pubber = QoSProfile(
 )
 
 class stanley_control(rx.Node):
-    DELTA_TIME = 0.1
+    DELTA_TIME = 0.05
 
-    endPoint = rx.Parameter('[1.885, 1.355]') #x= -1.885,y=  1.348, yaw = 90deg
+    endPoint = rx.Parameter('[1.8832, 1.3659]') #x= -1.885,y=  1.348, yaw = 90deg alt x = 1.6
     target_velocity = rx.Parameter(0.4)
     use_aruco_goal = rx.Parameter(False)
     aruco_goal_topic = rx.Parameter("aruco/poses")
@@ -39,7 +39,7 @@ class stanley_control(rx.Node):
     # Interfaces
     actuation = ActuationInterface()
     localizer = LocalizationInterface()
-    goal_tolerance = rx.Parameter(0.2) #m
+    goal_tolerance = rx.Parameter(0.21) #m
 
     #Publishers
     goal_pub = rx.Publisher(Marker, 'goal_marker', qos_pubber)
@@ -92,12 +92,14 @@ class stanley_control(rx.Node):
     def on_startup(self):
         self.reached_goal = False
         self.counter = 0
+        self.aruco_distance = 5.0 # default value until we get a reading from the subscriber
+        import time
+        time.sleep(12.0) # wait for localization to start up and get first state
 
-        self.controller = StanleyController()
+        self.controller = StanleyController(node=self)
         self.controller.target_velocity = self.target_velocity
 
-        import time
-        time.sleep(8.0) # wait for localization to start up and get first state
+        
         state = self.localizer.get_state()
         x, y, yaw, vel = state
 
@@ -109,6 +111,7 @@ class stanley_control(rx.Node):
         #publish goal and waypoints
         #self.publish_goal_marker(self.goal)
         #self.publish_waypoints_marker(self.waypoints)
+
 
         self.controller.update_traj(state, self.waypoints)
         self.create_timer(self.DELTA_TIME, self.loop)
@@ -128,16 +131,17 @@ class stanley_control(rx.Node):
                 self.reached_goal = True
 
         #self.update_goal()
-        mx = 0.5*(x + self.goal[0])
-        my = 0.5*(y + self.goal[1])
-        self.waypoints = [[mx, my], self.goal]
-        self.controller.update_traj(state, self.waypoints)
+        # mx = 0.5*(x + self.goal[0])
+        # my = 0.5*(y + self.goal[1])
+        # self.waypoints = [[mx, my], self.goal]
+        # self.controller.update_traj(state, self.waypoints)
+        self.controller.target_velocity = self.target_velocity * self.aruco_distance / 7.0
 
         if not self.reached_goal:
             steering, velocity = self.controller.compute_control(state)
-            self.get_logger().info(f"Steering: {steering}, Velocity: {velocity}")
+            # self.get_logger().info(f"Steering: {steering}, Velocity: {velocity}")
         else:
-            steering, velocity = 0.0, 0.0
+            steering, velocity = np.deg2rad(16), 0.0
 
         self.actuation.send_control(steering, velocity)
         
