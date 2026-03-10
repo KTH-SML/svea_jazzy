@@ -4,6 +4,7 @@ import numpy as np
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import PoseArray
 from visualization_msgs.msg import Marker
+import time
 
 from svea_core.interfaces import LocalizationInterface
 from svea_charging.controllers.stanleyController import StanleyController
@@ -30,6 +31,7 @@ class stanley_control(rx.Node):
     DELTA_TIME = 0.05
 
     endPoint = rx.Parameter('[1.8832, 1.3659]') #x= -1.885,y=  1.348, yaw = 90deg alt x = 1.6
+    endPoints = rx.Parameter('[0.361, 1.3659], [1.30485, 1.3659], [1.8832, 1.3659]')
     target_velocity = rx.Parameter(0.4)
     use_aruco_goal = rx.Parameter(False)
     aruco_goal_topic = rx.Parameter("aruco/poses")
@@ -83,35 +85,25 @@ class stanley_control(rx.Node):
 
        
         self.goal = [aruco_in_map[0], aruco_in_map[1]]
-        mid_x = 0.5 * (x + aruco_in_map[0])
-        mid_y = 0.5 * (y + aruco_in_map[1])
-        self.waypoints = [[mid_x, mid_y], self.goal]
+        self.waypoints = self.endPoints
         self.reached_goal = False
 
 
     def on_startup(self):
         self.reached_goal = False
         self.counter = 0
-        self.aruco_distance = 5.0 # default value until we get a reading from the subscriber
-        import time
-        time.sleep(12.0) # wait for localization to start up and get first state
+        self.aruco_distance = 5.0 # default value until we get a reading from the subscriber 
+        time.sleep(15.0) # wait for localization to start up and get first state
 
         self.controller = StanleyController(node=self)
         self.controller.target_velocity = self.target_velocity
 
-        
         state = self.localizer.get_state()
         x, y, yaw, vel = state
 
         self.goal = eval(self.endPoint)
-        mx = 0.5*(x + self.goal[0])
-        my = 0.5*(y + self.goal[1])
-        self.waypoints = [[mx, my], self.goal]
-        
-        #publish goal and waypoints
-        #self.publish_goal_marker(self.goal)
-        #self.publish_waypoints_marker(self.waypoints)
-
+        self.goals = eval(self.endPoints)
+        self.waypoints = self.goals
 
         self.controller.update_traj(state, self.waypoints)
         self.create_timer(self.DELTA_TIME, self.loop)
@@ -129,21 +121,16 @@ class stanley_control(rx.Node):
             if not self.reached_goal:
                 self.get_logger().info("Reached goal!")
                 self.reached_goal = True
-
-        #self.update_goal()
-        # mx = 0.5*(x + self.goal[0])
-        # my = 0.5*(y + self.goal[1])
-        # self.waypoints = [[mx, my], self.goal]
-        # self.controller.update_traj(state, self.waypoints)
-        self.controller.target_velocity = self.target_velocity * self.aruco_distance / 7.0
-
+        
         if not self.reached_goal:
             steering, velocity = self.controller.compute_control(state)
-            # self.get_logger().info(f"Steering: {steering}, Velocity: {velocity}")
+            self.get_logger().info(f"Steering: {steering}, Velocity: {velocity}")
         else:
             steering, velocity = np.deg2rad(16), 0.0
 
         self.actuation.send_control(steering, velocity)
+        self.publish_errors()
+        self.dist_to_goal.publish(Float32(data=dist))
         
 
         if self.counter % 5 == 0: # publish markers every .5 seconds
@@ -151,8 +138,6 @@ class stanley_control(rx.Node):
             self.publish_waypoints_marker(self.waypoints)
             self.publish_trajectory_marker(self.controller.cx, self.controller.cy)
             # Publish errors
-            self.publish_errors(x, y, yaw, vel)
-            self.dist_to_goal.publish(Float32(data=dist))
         self.counter += 1
 
     def distance_to_goal(self, state):
@@ -246,7 +231,9 @@ class stanley_control(rx.Node):
 
         self.traj_pub.publish(msg)
 
-    def publish_errors(self, x, y, yaw, vel):
+    def publish_errors(self):
+        _, _, _, vel = self.localizer.get_state()
+        
         self.cross_track_error_pub.publish(Float32(data=self.controller.cross_track_error)) #m
         self.yaw_error_pub.publish(Float32(data=np.rad2deg(self.controller.yaw_error))) #degrees
 

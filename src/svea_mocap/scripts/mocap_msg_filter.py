@@ -30,6 +30,7 @@ class MocapToPose(rx.Node):
 
     ## Subscribers ##
     mocap_topic = rx.Parameter('/rigid_bodies')
+    odom_topic = rx.Parameter('/svea67/odom')
 
     ## Publishers ##
     mocap_svea_pub = rx.Publisher(PoseWithCovarianceStamped, '/mocap/svea/pose', qos_normal)
@@ -45,11 +46,12 @@ class MocapToPose(rx.Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.initial_pose = False
-        time.sleep(3.0) # Wait for TF buffer to fill up with transforms
+        self.pose_update = False
+        time.sleep(10.0) # Wait for TF buffer to fill up with transforms
         self.get_logger().info("Starting Mocap interface Node...")
         self.get_logger().info("Mocap is ready.")
 
-        self.create_timer(0.1, self._timer_callback)
+        self.create_timer(5.0, self._timer_callback)
         
     def _timer_callback(self):
         self.initial_pose = False
@@ -58,27 +60,24 @@ class MocapToPose(rx.Node):
     def _rigid_bodies_pose_cb(self, msg: RigidBodies) -> None:
         for rigid_body in msg.rigidbodies:
             if rigid_body.rigid_body_name == "svea67":
-                self._svea_pose_msg.header = msg.header
-                self._svea_pose_msg.pose.pose = rigid_body.pose
-                self.mocap_svea_pub.publish(self._svea_pose_msg)
-                if not self.initial_pose and rigid_body.pose.position.x is not None:
-                    try:
-                        pose_stamped = PoseStamped()
-                        pose_stamped.header = msg.header
-                        pose_stamped.pose = rigid_body.pose
-                        transform = self.tf_buffer.lookup_transform('map', 'mocap', rclpy.time.Time(),timeout=rclpy.duration.Duration(seconds=1.0))
-                        pose_transformed = tf2_geometry_msgs.do_transform_pose_stamped(
-                            pose_stamped,
-                            transform
-                        )
-                        self._initialpose_msg.header = pose_transformed.header
-                        self._initialpose_msg.pose.pose = pose_transformed.pose
-                        self.initialpose_pub.publish(self._initialpose_msg)
-                        self.get_logger().info("Mocap svea initial pose published: x={:.2f}, y={:.2f}".format(
-                            pose_transformed.pose.position.x, pose_transformed.pose.position.y))
-                        self.initial_pose = True
-                    except TransformException as ex:
-                        self.get_logger().warn(f'Could not transform: {ex}')
+                try:
+                    pose_stamped = PoseStamped()
+                    pose_stamped.header = msg.header
+                    pose_stamped.pose = rigid_body.pose
+                    transform = self.tf_buffer.lookup_transform('map', 'mocap', rclpy.time.Time(),timeout=rclpy.duration.Duration(seconds=1.0))
+                    pose_transformed = tf2_geometry_msgs.do_transform_pose_stamped(
+                        pose_stamped,
+                        transform
+                    )
+                    self._initialpose_msg.header = pose_transformed.header
+                    self._initialpose_msg.pose.pose = pose_transformed.pose
+                    self.mocap_svea_pub.publish(self._initialpose_msg)
+                    self.pose_update = True
+                except TransformException as ex:
+                    self.get_logger().warn(f'Could not transform: {ex}')
+                if not self.initial_pose and self.pose_update:
+                    self.initialpose_pub.publish(self._initialpose_msg)
+                    self.initial_pose = True
             elif rigid_body.rigid_body_name == "trailer":
                 self._trailer_pose_msg.header = msg.header
                 self._trailer_pose_msg.pose.pose = rigid_body.pose
