@@ -25,6 +25,7 @@ L = 0.2  # [m] Wheel base of vehicle (TODO: check this value)
 max_steer = np.radians(60.0)  # [rad] max steering angle (TODO: check this value)
 
 Ki = 0.5
+Kd = 0.01
 
 
 
@@ -58,6 +59,7 @@ class StanleyController:
         self.target_velocity = 0.0
 
         self.error_integral = 0.0
+        self.error_derivative = 0.0
         self.error_prev = 0.0
 
         self.cross_track_error = 0.0
@@ -86,13 +88,16 @@ class StanleyController:
         """
         error = self.target_velocity - self.v
 
-        error_i = (error + self.error_prev) / 2 * 0.01
+        error_i = (error + self.error_prev) / 2 * dt
+        error_d = (error - self.error_prev) / dt
+        self.error_derivative = error_d
 
         self.error_integral += error_i
         self.error_integral = np.clip(self.error_integral, -self.target_velocity*1.5, self.target_velocity*1.5)  # Anti-windup
+        
         self.error_prev = error
 
-        return Kp * error + Ki * self.error_integral
+        return Kp * error + Ki * self.error_integral + Kd * self.error_derivative
 
 
     def stanley_control(self, cx, cy, cyaw, last_target_idx):
