@@ -94,7 +94,7 @@ class StanleyController:
 
         self.error_integral += error_i
         self.error_integral = np.clip(self.error_integral, -self.target_velocity*1.5, self.target_velocity*1.5)  # Anti-windup
-        
+
         self.error_prev = error
 
         return Kp * error + Ki * self.error_integral + Kd * self.error_derivative
@@ -225,7 +225,7 @@ class StanleyController:
 
     def compute_control(self, state):
         self.update(state)
-        steering = self.compute_steering() + np.deg2rad(16)
+        steering = self.compute_steering()
         velocity = self.compute_velocity()
         
 
