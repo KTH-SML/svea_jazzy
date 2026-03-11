@@ -35,11 +35,13 @@ class MocapToPose(rx.Node):
     ## Publishers ##
     mocap_svea_pub = rx.Publisher(PoseWithCovarianceStamped, '/mocap/svea/pose', qos_normal)
     mocap_trailer_pub = rx.Publisher(PoseWithCovarianceStamped, '/mocap/trailer/pose', qos_normal)
+    mocap_charging_station_pub = rx.Publisher(PoseWithCovarianceStamped, '/mocap/charging_station/pose', qos_normal)
     initialpose_pub = rx.Publisher(PoseWithCovarianceStamped, '/set_pose', qos_normal)    
 
     _svea_pose_msg = PoseWithCovarianceStamped()
     _trailer_pose_msg = PoseWithCovarianceStamped()
     _initialpose_msg = PoseWithCovarianceStamped()
+    _charging_station_pose_msg = PoseWithCovarianceStamped()
 
     def on_startup(self):
         """Start the Mocap interface by subscribing to the pose topic."""
@@ -82,6 +84,10 @@ class MocapToPose(rx.Node):
                 self._trailer_pose_msg.header = msg.header
                 self._trailer_pose_msg.pose.pose = rigid_body.pose
                 self.mocap_trailer_pub.publish(self._trailer_pose_msg)
+            elif rigid_body.rigid_body_name == "svea_charging_station":
+                self._charging_station_pose_msg.header = msg.header
+                self._charging_station_pose_msg.pose.pose = rigid_body.pose
+                self.mocap_charging_station_pub.publish(self._charging_station_pose_msg)
 
 if __name__ == '__main__':
     MocapToPose.main()
