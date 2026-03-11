@@ -31,17 +31,19 @@ class stanley_control(rx.Node):
     DELTA_TIME = 0.05
 
     endPoint = rx.Parameter('[1.8832, 1.3659]') #x= -1.885,y=  1.348, yaw = 90deg alt x = 1.6
-    endPoints = rx.Parameter('[0.361, 1.3659], [1.30485, 1.3659], [1.8832, 1.3659]')
+    endPoints = rx.Parameter('[0.0, 1.3659], [1.30485, 1.3659], [1.8832, 1.3659]')
     target_velocity = rx.Parameter(0.4)
     use_aruco_goal = rx.Parameter(False)
+    use_adaptive_speed = rx.Parameter(True)
     aruco_goal_topic = rx.Parameter("aruco/poses")
     aruco_pose_is_car_in_marker_frame = rx.Parameter(True)
     aruco_goal_offset = rx.Parameter(0.0)  # stop short of marker center [m]
     aruco_distance_topic = rx.Parameter("aruco/distance_m") # distance to aruco marker, updated by subscriber
+
     # Interfaces
     actuation = ActuationInterface()
     localizer = LocalizationInterface()
-    goal_tolerance = rx.Parameter(0.21) #m
+    goal_tolerance = rx.Parameter(0.2) #m
 
     #Publishers
     goal_pub = rx.Publisher(Marker, 'goal_marker', qos_pubber)
@@ -88,12 +90,15 @@ class stanley_control(rx.Node):
         self.waypoints = self.endPoints
         self.reached_goal = False
 
+        self.aruco_distance = 5.0 # default value until we get a reading from the subscriber
+         
+
+
 
     def on_startup(self):
         self.reached_goal = False
         self.counter = 0
-        self.aruco_distance = 5.0 # default value until we get a reading from the subscriber 
-        time.sleep(15.0) # wait for localization to start up and get first state
+        time.sleep(18.0) # wait for localization to start up and get first state
 
         self.controller = StanleyController(node=self)
         self.controller.target_velocity = self.target_velocity
@@ -116,6 +121,9 @@ class stanley_control(rx.Node):
         state = self.localizer.get_state()
         x, y, yaw, vel = state
 
+        if bool(self.use_adaptive_speed):
+            self.controller.target_velocity = self.target_velocity * (self.aruco_distance / 5.0)
+
         dist = self.distance_to_goal(state)
         if dist <= self.goal_tolerance:
             if not self.reached_goal:
@@ -127,6 +135,7 @@ class stanley_control(rx.Node):
             self.get_logger().info(f"Steering: {steering}, Velocity: {velocity}")
         else:
             steering, velocity = np.deg2rad(16), 0.0
+            self.velocity = 0.0
 
         self.actuation.send_control(steering, velocity)
         self.publish_errors()
