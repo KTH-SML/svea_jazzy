@@ -3,13 +3,13 @@
     "3D!4l77t3q": {
       "cameraState": {
         "perspective": true,
-        "distance": 5.0068817948188045,
-        "phi": 67.89701490859457,
-        "thetaOffset": 20.063033294266948,
+        "distance": 10.266841665527812,
+        "phi": 67.89701490859453,
+        "thetaOffset": 20.063033294267246,
         "targetOffset": [
-          -1.3955620697769524,
-          -0.3022674441651235,
-          -3.857821939755089e-16
+          -0.6486044190222674,
+          -1.0477507811206705,
+          -3.7885027554212186e-16
         ],
         "target": [
           0,
@@ -115,13 +115,10 @@
       "imageMode": {}
     },
     "RawMessages!347jq3l": {
-      "topicPath": "/svea67/odometry/local"
-    },
-    "RawMessages!3q6sekj": {
-      "topicPath": "/mocap/svea/pose"
+      "topicPath": "/self/odometry/local"
     },
     "Indicator!1oozttk": {
-      "path": "/svea67/dist_to_goal.data",
+      "path": "/self/dist_to_goal.data",
       "style": "bulb",
       "fontSize": 36,
       "fallbackColor": "#a0a0a0",
@@ -144,55 +141,11 @@
         }
       ]
     },
-    "Image!3vpgmez": {
-      "cameraState": {
-        "distance": 20,
-        "perspective": true,
-        "phi": 60,
-        "target": [
-          0,
-          0,
-          0
-        ],
-        "targetOffset": [
-          0,
-          0,
-          0
-        ],
-        "targetOrientation": [
-          0,
-          0,
-          0,
-          1
-        ],
-        "thetaOffset": 45,
-        "fovy": 45,
-        "near": 0.5,
-        "far": 5000
-      },
-      "followMode": "follow-pose",
-      "scene": {},
-      "transforms": {},
-      "topics": {},
-      "layers": {},
-      "publish": {
-        "type": "point",
-        "poseTopic": "/move_base_simple/goal",
-        "pointTopic": "/clicked_point",
-        "poseEstimateTopic": "/initialpose",
-        "poseEstimateXDeviation": 0.5,
-        "poseEstimateYDeviation": 0.5,
-        "poseEstimateThetaDeviation": 0.26179939
-      },
-      "imageMode": {
-        "imageTopic": "/svea67/aruco/debug_image/compressed"
-      }
-    },
     "Plot!39tehds": {
       "paths": [
         {
           "timestampMethod": "receiveTime",
-          "value": "/svea67/cross_track_error.data",
+          "value": "/self/cross_track_error.data",
           "enabled": true,
           "color": "#e34f4f",
           "id": "d152798f-388f-4eef-b11a-52be6ea839b1"
@@ -203,7 +156,7 @@
       "paths": [
         {
           "timestampMethod": "receiveTime",
-          "value": "/svea67/velocity_error.data",
+          "value": "/self/velocity_error.data",
           "enabled": true,
           "color": "#d04fe3",
           "id": "31ddd231-4a13-4d1d-b38c-8594a5a55db4"
@@ -214,7 +167,7 @@
       "paths": [
         {
           "timestampMethod": "receiveTime",
-          "value": "/svea67/yaw_error.data",
+          "value": "/self/yaw_error.data",
           "enabled": true,
           "color": "#4e98e2",
           "id": "d2e028b8-33ac-48c5-a2df-9f08968aa1ec"
@@ -230,23 +183,13 @@
   "layout": {
     "direction": "row",
     "first": {
-      "first": {
-        "first": "RawMessages!347jq3l",
-        "second": "RawMessages!3q6sekj",
-        "direction": "column",
-        "splitPercentage": 46.655564346561185
-      },
+      "first": "RawMessages!347jq3l",
       "second": "Indicator!1oozttk",
       "direction": "column",
       "splitPercentage": 84.83390395114277
     },
     "second": {
-      "first": {
-        "first": "Tab!2l2kw8o",
-        "second": "Image!3vpgmez",
-        "direction": "column",
-        "splitPercentage": 73.54996757691477
-      },
+      "first": "Tab!2l2kw8o",
       "second": {
         "first": {
           "first": "Plot!39tehds",
@@ -258,8 +201,8 @@
         "splitPercentage": 67.209453130629
       },
       "direction": "row",
-      "splitPercentage": 64.4825018615041
+      "splitPercentage": 45.83983646484634
     },
-    "splitPercentage": 21.591804570527977
+    "splitPercentage": 32.584654112644046
   }
 }

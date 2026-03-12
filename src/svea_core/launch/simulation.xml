@@ -28,10 +28,10 @@
             <param name="base_frame" value="$(var base_frame)"/>
         </node>
 
-        <node name="sim_lidar" pkg="svea_core" exec="sim_lidar.py" output="screen">
+        <!-- <node name="sim_lidar" pkg="svea_core" exec="sim_lidar.py" output="screen">
             <param from="$(find-pkg-share svea_core)/params/$(var obstacle_map).yaml"/>
             <param name="laser_frame" value="$(var name)/laser" />
-        </node>
+        </node> -->
 
     </group>
 

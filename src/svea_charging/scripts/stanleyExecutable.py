@@ -46,6 +46,7 @@ class stanley_control(rx.Node):
     
     use_adaptive_speed = rx.Parameter(True)
     use_mocap_goal = rx.Parameter(False)
+    use_mocap = rx.Parameter(False)
     aruco_goal_topic = rx.Parameter("aruco/poses")
     aruco_pose_is_car_in_marker_frame = rx.Parameter(True)
     aruco_goal_offset = rx.Parameter(0.0)  # stop short of marker center [m]
@@ -125,30 +126,37 @@ class stanley_control(rx.Node):
         self.counter = 0
         self.aruco_distance = 5.0 # default value until we get a reading from the subscriber
         
-        if self.use_mocap_goal:
-            while not (self.charging_station_identified_mocap and self.svea_identified_mocap):
-                if startup_counter == 0:
-                    self.get_logger().info("Waiting for charging station pose...")
-                startup_counter += 1
-                time.sleep(1.0)
-
-        else:
-            while not self.svea_identified_mocap:
+        if self.use_mocap:
+            if self.use_mocap_goal:
+                while not (self.charging_station_identified_mocap and self.svea_identified_mocap):
                     if startup_counter == 0:
                         self.get_logger().info("Waiting for charging station pose...")
+                    startup_counter += 1
+                    time.sleep(1.0)
 
-                        self.endPoints = eval(self.endPoints)
-                        self.goal = eval(self.endPoint)
-                        self.waypoints = self.endPoints
-                        startup_counter += 1
-                        time.sleep(1.0)
+            else:
+                while not self.svea_identified_mocap:
+                        if startup_counter == 0:
+                            self.get_logger().info("Waiting for charging station pose...")
+
+                            self.endPoints = eval(self.endPoints)
+                            self.goal = eval(self.endPoint)
+                            self.waypoints = self.endPoints
+                            startup_counter += 1
+                            time.sleep(1.0)
+        
+            state = self.svea_pose.pose.pose.position.x, self.svea_pose.pose.pose.position.y, euler_from_quaternion([self.svea_pose.pose.pose.orientation.x, self.svea_pose.pose.pose.orientation.y, self.svea_pose.pose.pose.orientation.z, self.svea_pose.pose.pose.orientation.w])[2], 0.0
+        else:
+            time.sleep(7.0)
+            self.endPoints = eval(self.endPoints)
+            self.goal = eval(self.endPoint)
+            self.waypoints = self.endPoints
+            state = self.localizer.get_state()
+            
 
         self.controller = StanleyController(node=self)
         self.controller.target_velocity = self.target_velocity
-
-        initialState = self.svea_pose.pose.pose.position.x, self.svea_pose.pose.pose.position.y, euler_from_quaternion([self.svea_pose.pose.pose.orientation.x, self.svea_pose.pose.pose.orientation.y, self.svea_pose.pose.pose.orientation.z, self.svea_pose.pose.pose.orientation.w])[2], 0.0
-
-        self.controller.update_traj(initialState, self.waypoints)
+        self.controller.update_traj(state, self.waypoints)
         self.create_timer(self.DELTA_TIME, self.loop)
 
 
