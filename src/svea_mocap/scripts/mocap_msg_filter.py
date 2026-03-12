@@ -4,10 +4,12 @@ import rclpy
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSHistoryPolicy
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from mocap4r2_msgs.msg import RigidBodies
+import std_msgs
 from tf2_ros import TransformListener, Buffer
 from tf2_ros import TransformException
 import tf2_geometry_msgs
 import time
+from std_msgs.msg import Bool
 
 from svea_core import rosonic as rx
 
@@ -84,10 +86,6 @@ class MocapToPose(rx.Node):
                 self._trailer_pose_msg.header = msg.header
                 self._trailer_pose_msg.pose.pose = rigid_body.pose
                 self.mocap_trailer_pub.publish(self._trailer_pose_msg)
-            elif rigid_body.rigid_body_name == "svea_charging_station":
-                self._charging_station_pose_msg.header = msg.header
-                self._charging_station_pose_msg.pose.pose = rigid_body.pose
-                self.mocap_charging_station_pub.publish(self._charging_station_pose_msg)
 
 if __name__ == '__main__':
     MocapToPose.main()
