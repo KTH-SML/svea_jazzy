@@ -30,7 +30,7 @@
         <arg name="initial_pose_a" value="$(var initial_pose_a)" />
     </include>
 
-     <node pkg="tf2_ros" exec="static_transform_publisher" name="qualisys_map_broadcaster"
+    <node pkg="tf2_ros" exec="static_transform_publisher" name="qualisys_map_broadcaster"
                     args="
                         --x 0.5 --y 0 --z 0 --yaw -1.57079632679 --pitch 0 --roll 0
                         --frame-id $(var map_frame)
