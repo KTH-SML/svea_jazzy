@@ -119,7 +119,6 @@ class stanley_control(rx.Node):
         self.reached_goal = False
          
 
-
     def on_startup(self):
         startup_counter = 0
         self.reached_goal = False
