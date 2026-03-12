@@ -136,14 +136,13 @@ class stanley_control(rx.Node):
 
             else:
                 while not self.svea_identified_mocap:
-                        if startup_counter == 0:
-                            self.get_logger().info("Waiting for charging station pose...")
-
-                            self.endPoints = eval(self.endPoints)
-                            self.goal = eval(self.endPoint)
-                            self.waypoints = self.endPoints
-                            startup_counter += 1
-                            time.sleep(1.0)
+                    if startup_counter == 0:
+                        self.get_logger().info("Waiting for SVEA mocap pose...")
+                        self.endPoints = eval(self.endPoints)
+                        self.goal = eval(self.endPoint)
+                        self.waypoints = self.endPoints
+                    startup_counter += 1
+                    time.sleep(1.0)
         
             state = self.svea_pose.pose.pose.position.x, self.svea_pose.pose.pose.position.y, euler_from_quaternion([self.svea_pose.pose.pose.orientation.x, self.svea_pose.pose.pose.orientation.y, self.svea_pose.pose.pose.orientation.z, self.svea_pose.pose.pose.orientation.w])[2], 0.0
         else:

@@ -58,6 +58,7 @@
             <node name="stanleyExecutable" pkg="svea_charging" exec="stanleyExecutable.py" output="screen">
                 <param name="use_rviz" value="$(var use_foxglove)"/>
                 <param name="is_sim" value="$(var is_sim)"/>
+                <param name="use_mocap" value="$(var use_mocap)"/>
                 <param name="localization/base_frame" value="$(var name)/base_link"/>
                 <!-- Allow namespace -->
                 <param name="steering_top" value="lli/ctrl/steering"/>
@@ -71,17 +72,18 @@
 
     <group unless="$(var is_sim)">
         <let name="name" value="svea67"/> 
-        <push-ros-namespace namespace="$(var name)"/>
         <!-- Start Svea Core -->
         <include file="$(find-pkg-share svea_core)/launch/svea_mocap.xml">
             <arg name="name" value="$(var name)" />
             <arg name="is_sim" value="$(var is_sim)" />
             <arg name="map" value="$(var map)" />
         </include>
+        <push-ros-namespace namespace="$(var name)"/>
         <!-- Start stanleyController -->
         <node name="stanleyExecutable" pkg="svea_charging" exec="stanleyExecutable.py" output="screen">
             <param name="use_rviz" value="$(var use_foxglove)"/>
             <param name="is_sim" value="$(var is_sim)"/>
+            <param name="use_mocap" value="$(var use_mocap)"/>
             <param name="localization/base_frame" value="$(var name)/base_link"/>
         </node>
 
