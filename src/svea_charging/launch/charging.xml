@@ -3,7 +3,7 @@
     <!-- Launch file arguments -->
     <arg name="map"             default="sml"/>
     <arg name="is_sim"          default="true"/>
-    <arg name="use_mocap"          default="true"/>
+    <arg name="use_mocap"          default="false"/>
     <arg name="use_foxglove"    default="true"/>
     <arg name="initial_pose_x"  default="-2.5"/> <!-- changed-->
     <arg name="initial_pose_y"  default="0.0"/> <!-- changed-->
@@ -48,6 +48,7 @@
             <arg name="initial_pose_x" value="$(var initial_pose_x)" />
             <arg name="initial_pose_y" value="$(var initial_pose_y)" />
             <arg name="initial_pose_a" value="$(var initial_pose_a)" />
+            <arg name="state" value="$(var state)" />
         </include>
 
         <group>
@@ -82,7 +83,6 @@
             <param name="use_rviz" value="$(var use_foxglove)"/>
             <param name="is_sim" value="$(var is_sim)"/>
             <param name="localization/base_frame" value="$(var name)/base_link"/>
-            <param name="use_mocap" value="$(var use_mocap)"/>
         </node>
 
         <node if="$(var use_aruco_camera)" name="aruco_camera_test" pkg="svea_charging" exec="aruco_camera_test.py" output="screen">
