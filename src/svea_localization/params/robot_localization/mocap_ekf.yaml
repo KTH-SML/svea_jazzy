@@ -69,7 +69,7 @@
     # MOCAP ##################################
     pose0: /mocap/svea/pose
     pose0_config: [true,  true,  true,
-                   false, false, true,
+                   false, false, false,
                    false, false, false,
                    false, false, false,
                    false, false, false]

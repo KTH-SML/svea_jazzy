@@ -42,7 +42,7 @@ class stanley_control(rx.Node):
     endPoint = rx.Parameter('[1.891350, 1.363510]') #x= -1.885,y=  1.348, yaw = 90deg alt x = 1.6
     endPoints = rx.Parameter('[0.9, 1.3659], [1.6, 1.363510], [1.891350, 1.363510]')
 
-    target_velocity = rx.Parameter(0.4)
+    target_velocity = rx.Parameter(0.5)
     
     use_adaptive_speed = rx.Parameter(True)
     use_mocap_goal = rx.Parameter(False)

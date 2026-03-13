@@ -10,6 +10,7 @@ from tf2_ros import TransformException
 import tf2_geometry_msgs
 import time
 from std_msgs.msg import Bool
+import numpy as np
 
 from svea_core import rosonic as rx
 
@@ -55,7 +56,7 @@ class MocapToPose(rx.Node):
         self.get_logger().info("Starting Mocap interface Node...")
         self.get_logger().info("Mocap is ready.")
 
-        self.create_timer(5.0, self._timer_callback)
+        # self.create_timer(0.05, self._timer_callback)
         
     def _timer_callback(self):
         self.initial_pose = False
@@ -63,7 +64,7 @@ class MocapToPose(rx.Node):
     @rx.Subscriber(RigidBodies, mocap_topic, qos_profile=qos_subber)
     def _rigid_bodies_pose_cb(self, msg: RigidBodies) -> None:
         for rigid_body in msg.rigidbodies:
-            if rigid_body.rigid_body_name == "svea67":
+            if rigid_body.rigid_body_name == "svea67" and not np.isnan(rigid_body.pose.position.x):
                 try:
                     pose_stamped = PoseStamped()
                     pose_stamped.header = msg.header
