@@ -58,8 +58,8 @@ class imu_bias_remove(rx.Node):
             imu_msg.header.frame_id = self.frame_id
             imu_msg.angular_velocity.z -= self.bias_angular_z
             imu_msg.angular_velocity.z = imu_msg.angular_velocity.z / 4.0
-            imu_msg.linear_acceleration.x -= self.bias_linear_x
-            imu_msg.linear_acceleration.y -= self.bias_linear_y
+            imu_msg.linear_acceleration.x = 0.0 if abs(imu_msg.linear_acceleration.x - self.bias_linear_x) < 0.05 else imu_msg.linear_acceleration.x - self.bias_linear_x
+            imu_msg.linear_acceleration.y = 0.0 if abs(imu_msg.linear_acceleration.y - self.bias_linear_y) < 0.05 else imu_msg.linear_acceleration.y - self.bias_linear_y
 
             x = imu_msg.linear_acceleration.y * -1
             y = imu_msg.linear_acceleration.x
@@ -70,7 +70,7 @@ class imu_bias_remove(rx.Node):
             imu_msg.linear_acceleration.z = z
 
             
-            if abs(imu_msg.linear_acceleration.x) < 0.05:
+            if abs(imu_msg.linear_acceleration.x) < 0.02:
                 imu_msg.linear_acceleration.x = 0.0
 
             if abs(imu_msg.angular_velocity.z) < 0.03:

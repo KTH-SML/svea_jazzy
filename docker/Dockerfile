@@ -21,12 +21,14 @@ RUN apt-get update -y
 # This is for any added ROS packages
 COPY src ./src
 COPY entrypoint requirements.txt ./
-RUN rosdep install \
+RUN apt-get update && \
+    rosdep update && \
+    rosdep install \
         --rosdistro $ROSDISTRO \
         --from-paths src \
         --ignore-src \
         -qry \
-        && \
+        -y -r && \
     pip install \
         --break-system-packages \
         -r requirements.txt

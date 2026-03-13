@@ -1,0 +1,265 @@
+{
+  "configById": {
+    "3D!4l77t3q": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 5.0068817948188045,
+        "phi": 67.89701490859457,
+        "thetaOffset": 20.063033294266948,
+        "targetOffset": [
+          -1.3955620697769524,
+          -0.3022674441651235,
+          -3.857821939755089e-16
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {
+        "frame:camera": {
+          "visible": false
+        },
+        "frame:svea67/laser": {
+          "visible": false
+        },
+        "frame:svea67/wheel_encoder": {
+          "visible": false
+        },
+        "frame:svea67/imu": {
+          "visible": false
+        },
+        "frame:svea67/gps": {
+          "visible": false
+        }
+      },
+      "topics": {
+        "/map": {
+          "visible": true
+        },
+        "/self/goal_marker": {
+          "visible": true
+        },
+        "/self/path_marker": {
+          "visible": true
+        },
+        "/self/traj_marker": {
+          "visible": true
+        },
+        "/svea67/goal_marker": {
+          "visible": true
+        },
+        "/svea67/path_marker": {
+          "visible": true
+        },
+        "/svea67/traj_marker": {
+          "visible": true
+        },
+        "/svea67/pure_pursuit/goal_marker": {
+          "visible": true
+        },
+        "/traj_marker": {
+          "visible": true
+        },
+        "/svea67/path_plan": {
+          "visible": true
+        },
+        "/path_marker": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "grid": {
+          "visible": true,
+          "drawBehind": false,
+          "label": "Grid",
+          "instanceId": "d011ab71-7cc8-4010-b29b-d303e896a119",
+          "layerId": "foxglove.Grid",
+          "size": 10,
+          "divisions": 10,
+          "lineWidth": 1,
+          "color": "#248eff",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {}
+    },
+    "RawMessages!347jq3l": {
+      "topicPath": "/svea67/odometry/local"
+    },
+    "RawMessages!3q6sekj": {
+      "topicPath": "/mocap/svea/pose"
+    },
+    "Indicator!1oozttk": {
+      "path": "/svea67/dist_to_goal.data",
+      "style": "bulb",
+      "fontSize": 36,
+      "fallbackColor": "#a0a0a0",
+      "fallbackLabel": "False",
+      "rules": [
+        {
+          "operator": "<",
+          "rawValue": "0.2",
+          "color": "#68e24a",
+          "label": "True"
+        }
+      ]
+    },
+    "Tab!2l2kw8o": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "3D",
+          "layout": "3D!4l77t3q"
+        }
+      ]
+    },
+    "Image!3vpgmez": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/svea67/aruco/debug_image/compressed"
+      }
+    },
+    "Plot!39tehds": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/svea67/cross_track_error.data",
+          "enabled": true,
+          "color": "#e34f4f",
+          "id": "d152798f-388f-4eef-b11a-52be6ea839b1"
+        }
+      ]
+    },
+    "Plot!11scjvn": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/svea67/velocity_error.data",
+          "enabled": true,
+          "color": "#d04fe3",
+          "id": "31ddd231-4a13-4d1d-b38c-8594a5a55db4"
+        }
+      ]
+    },
+    "Plot!4g7e9bb": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/svea67/yaw_error.data",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "d2e028b8-33ac-48c5-a2df-9f08968aa1ec"
+        }
+      ]
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "first": {
+      "first": {
+        "first": "RawMessages!347jq3l",
+        "second": "RawMessages!3q6sekj",
+        "direction": "column",
+        "splitPercentage": 46.655564346561185
+      },
+      "second": "Indicator!1oozttk",
+      "direction": "column",
+      "splitPercentage": 84.83390395114277
+    },
+    "second": {
+      "first": {
+        "first": "Tab!2l2kw8o",
+        "second": "Image!3vpgmez",
+        "direction": "column",
+        "splitPercentage": 73.54996757691477
+      },
+      "second": {
+        "first": {
+          "first": "Plot!39tehds",
+          "second": "Plot!11scjvn",
+          "direction": "column"
+        },
+        "second": "Plot!4g7e9bb",
+        "direction": "column",
+        "splitPercentage": 67.209453130629
+      },
+      "direction": "row",
+      "splitPercentage": 64.4825018615041
+    },
+    "splitPercentage": 21.591804570527977
+  }
+}

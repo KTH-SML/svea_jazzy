@@ -1,0 +1,82 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- Arguments BEGIN -->
+
+    <arg name="name"                    default="self"/>
+    <arg name="is_sim"                  default="true"/>
+    <arg name="is_indoor"               default="true"/>
+    <arg name="initial_pose_x"          default="0.0"/>
+    <arg name="initial_pose_y"          default="0.0"/>
+    <arg name="initial_pose_a"          default="0.0"/>
+
+    <!-- When indoors, map_file is required -->
+    <group if="$(var is_indoor)">
+        <arg name="map_file"/>
+    </group>
+
+    <!-- Frames -->
+    <arg name="map_frame"   default="map"/>
+    <arg name="odom_frame"  default="$(var name)/odom"/>
+    <arg name="base_frame"  default="$(var name)/base_link"/>
+
+    <!-- Lidar -->
+    <arg name="lidar_ip" default="192.168.0.10"/>
+
+    <!-- Arguments END -->
+
+    <group>
+        <group>
+            <push-ros-namespace namespace="$(var name)"/>
+
+            <!-- Static transforms for sensors -->
+            <include file="$(find-pkg-share svea_localization)/launch/transforms.xml">
+                <arg name="is_indoor"  value="$(var is_indoor)"/>
+                <arg name="map_frame"  value="$(var map_frame)"/>
+                <arg name="odom_frame" value="$(var odom_frame)"/>
+                <arg name="base_frame" value="$(var base_frame)"/>
+            </include>
+        </group>
+
+        <!-- If-Else Group -->
+        <group if="$(var is_sim)">
+            <!-- No simulation-specific launches yet -->
+        </group>
+        <group unless="$(var is_sim)">
+            <let name="use_sim_time" value="false"/>
+
+            <!-- Robot localization (Local EKF)-->
+            <node pkg="robot_localization" exec="ekf_node" name="ekf_local" output="screen">
+                <param from="$(find-pkg-share svea_localization)/params/mocap_ekf.yaml" />
+                <param name="map_frame"             value="$(var map_frame)"/>
+                <param name="odom_frame"            value="$(var odom_frame)"/>
+                <param name="base_link_frame"       value="$(var base_frame)"/>
+                <param name="world_frame"           value="$(var odom_frame)"/>
+                <param name="imu0"                  value="/lli/filtered/imu"/>
+                <param name="pose0"                 value="/mocap/svea/pose"/>
+                <param name="twist0"                value="/lli/filtered/encoders"/>
+                <remap from="/odometry/filtered"    to="$(var name)/odometry/local"/>
+            </node>
+
+            <!-- If-Else Group -->
+            <group if="$(var is_indoor)">
+                <group>
+                    <push-ros-namespace namespace="$(var name)"/>
+                    
+                    <!-- Start LiDAR -->
+                    <include file="$(find-pkg-share svea_localization)/launch/lidar.xml">
+                        <arg name="lidar_ip"    value="$(var lidar_ip)"/>
+                        <arg name="lidar_frame" value="$(var name)/laser"/>
+                    </include>
+                </group>
+
+                <!--mocap localization -->
+                <include file="$(find-pkg-share qualisys_driver)/launch/qualisys.launch.py"/>
+                
+                <node pkg="svea_mocap" exec="mocap_msg_filter.py" name="mocap_msg_filter" output="screen"/>
+                
+            </group>
+        </group>
+
+    </group>
+
+</launch>
