@@ -8,9 +8,8 @@ import time
 
 from svea_core.interfaces import LocalizationInterface
 from svea_charging.controllers.stanleyController import StanleyController
-from svea_core.interfaces import ActuationInterface
 from svea_core import rosonic as rx
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, String
 from tf_transformations import euler_from_quaternion
 from rclpy.qos import (
     QoSProfile,
@@ -40,9 +39,14 @@ class stanley_control(rx.Node):
 
 
     endPoint = rx.Parameter('[1.891350, 1.363510]') #x= -1.885,y=  1.348, yaw = 90deg alt x = 1.6
-    endPoints = rx.Parameter('[0.9, 1.3659], [1.6, 1.363510], [1.891350, 1.363510]')
+    endPoints = rx.Parameter('[-0.1, 1.363510], [1.6, 1.363510], [1.891350, 1.363510]')
 
     target_velocity = rx.Parameter(0.5)
+    controller_name = rx.Parameter("stanley")
+    active_controller = rx.Parameter("idle")
+
+    steering_cmd_topic = rx.Parameter("stanley/cmd_steering_rad")
+    velocity_cmd_topic = rx.Parameter("stanley/cmd_velocity_mps")
     
     use_adaptive_speed = rx.Parameter(True)
     use_mocap_goal = rx.Parameter(False)
@@ -53,13 +57,12 @@ class stanley_control(rx.Node):
     aruco_distance_topic = rx.Parameter("aruco/distance_m") # distance to aruco marker, updated by subscriber
     use_aruco_goal = rx.Parameter(False)
 
-
-    # Interfaces
-    actuation = ActuationInterface()
     localizer = LocalizationInterface()
     goal_tolerance = rx.Parameter(0.2) #m
 
     #Publishers
+    steering_cmd_pub = rx.Publisher(Float32, steering_cmd_topic, qos_pubber)
+    velocity_cmd_pub = rx.Publisher(Float32, velocity_cmd_topic, qos_pubber)
     goal_pub = rx.Publisher(Marker, 'goal_marker', qos_pubber)
     path_pub = rx.Publisher(Marker, 'path_marker', qos_pubber)
     traj_pub = rx.Publisher(Marker, 'traj_marker', qos_pubber)
@@ -89,6 +92,10 @@ class stanley_control(rx.Node):
         if not bool(self.use_aruco_goal):
             return
         self.aruco_distance = msg.data
+
+    @rx.Subscriber(String, "mission/active_controller", qos_pubber)
+    def _mission_active_cb(self, msg: String):
+        self.active_controller = msg.data
 
     @rx.Subscriber(PoseArray, aruco_goal_topic)
     def _aruco_goal_cb(self, msg: PoseArray):
@@ -121,41 +128,16 @@ class stanley_control(rx.Node):
          
 
     def on_startup(self):
-        startup_counter = 0
         self.reached_goal = False
         self.counter = 0
         self.aruco_distance = 5.0 # default value until we get a reading from the subscriber
-        
-        if self.use_mocap:
-            if self.use_mocap_goal:
-                while not (self.charging_station_identified_mocap and self.svea_identified_mocap):
-                    if startup_counter == 0:
-                        self.get_logger().info("Waiting for charging station pose...")
-                    startup_counter += 1
-                    time.sleep(1.0)
-
-            else:
-                while not self.svea_identified_mocap:
-                    if startup_counter == 0:
-                        self.get_logger().info("Waiting for SVEA mocap pose...")
-                        self.endPoints = eval(self.endPoints)
-                        self.goal = eval(self.endPoint)
-                        self.waypoints = self.endPoints
-                    startup_counter += 1
-                    time.sleep(1.0)
-        
-            state = self.svea_pose.pose.pose.position.x, self.svea_pose.pose.pose.position.y, euler_from_quaternion([self.svea_pose.pose.pose.orientation.x, self.svea_pose.pose.pose.orientation.y, self.svea_pose.pose.pose.orientation.z, self.svea_pose.pose.pose.orientation.w])[2], 0.0
-        else:
-            time.sleep(7.0)
-            self.endPoints = eval(self.endPoints)
-            self.goal = eval(self.endPoint)
-            self.waypoints = self.endPoints
-            state = self.localizer.get_state()
-            
-
+        self.controller_ready = False
+        self.wait_log_throttle = 0
+        self.endPoints = eval(self.endPoints)
+        self.goal = eval(self.endPoint)
+        self.waypoints = self.endPoints
         self.controller = StanleyController(node=self)
         self.controller.target_velocity = self.target_velocity
-        self.controller.update_traj(state, self.waypoints)
         self.create_timer(self.DELTA_TIME, self.loop)
 
 
@@ -163,7 +145,13 @@ class stanley_control(rx.Node):
         """
         Main loop of the Stanley controller. 
         """
-        state = self.localizer.get_state()
+        if self.active_controller != str(self.controller_name):
+            return
+
+        state = self._get_control_state()
+        if state is None:
+            return
+
         x, y, yaw, vel = state
 
         if bool(self.use_adaptive_speed):
@@ -173,16 +161,17 @@ class stanley_control(rx.Node):
         if dist <= self.goal_tolerance:
             if not self.reached_goal:
                 self.get_logger().info("Reached goal!")
-                self.reached_goal = True
+                self.reached_goal = False # for the line follower implementation
         
         if not self.reached_goal:
             steering, velocity = self.controller.compute_control(state)
-            self.get_logger().info(f"Steering: {steering}, Velocity: {velocity}")
+            # self.get_logger().info(f"Steering: {steering}, Velocity: {velocity}")
         else:
             steering, velocity = np.deg2rad(16), 0.0
             self.velocity = 0.0
 
-        self.actuation.send_control(steering, velocity)
+        self.steering_cmd_pub.publish(Float32(data=float(steering)))
+        self.velocity_cmd_pub.publish(Float32(data=float(velocity)))
         self.publish_errors()
         self.dist_to_goal.publish(Float32(data=dist))
         
@@ -193,6 +182,45 @@ class stanley_control(rx.Node):
             self.publish_trajectory_marker(self.controller.cx, self.controller.cy)
             # Publish errors
         self.counter += 1
+
+    def _get_control_state(self):
+        if not bool(self.use_mocap):
+            state = self.localizer.get_state()
+            if not self.controller_ready:
+                self.controller.update_traj(state, self.waypoints)
+                self.controller_ready = True
+            return state
+
+        if bool(self.use_mocap_goal):
+            if not (self.charging_station_identified_mocap and self.svea_identified_mocap):
+                if self.wait_log_throttle % 20 == 0:
+                    self.get_logger().info("Waiting for mocap pose and charging station pose...")
+                self.wait_log_throttle += 1
+                return None
+        elif not self.svea_identified_mocap:
+            if self.wait_log_throttle % 20 == 0:
+                self.get_logger().info("Waiting for SVEA mocap pose...")
+            self.wait_log_throttle += 1
+            return None
+
+        self.wait_log_throttle = 0
+        state = (
+            self.svea_pose.pose.pose.position.x,
+            self.svea_pose.pose.pose.position.y,
+            euler_from_quaternion(
+                [
+                    self.svea_pose.pose.pose.orientation.x,
+                    self.svea_pose.pose.pose.orientation.y,
+                    self.svea_pose.pose.pose.orientation.z,
+                    self.svea_pose.pose.pose.orientation.w,
+                ]
+            )[2],
+            0.0,
+        )
+        if not self.controller_ready:
+            self.controller.update_traj(state, self.waypoints)
+            self.controller_ready = True
+        return state
 
 
     def calculate_points(self):

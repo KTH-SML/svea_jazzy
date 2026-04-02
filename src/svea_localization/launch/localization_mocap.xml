@@ -20,7 +20,7 @@
     <arg name="base_frame"  default="$(var name)/base_link"/>
 
     <!-- Lidar -->
-    <arg name="lidar_ip" default="192.168.0.10"/>
+    <!-- <arg name="lidar_ip" default="192.168.0.10"/> -->
 
     <!-- Arguments END -->
 
@@ -63,10 +63,10 @@
                     <push-ros-namespace namespace="$(var name)"/>
                     
                     <!-- Start LiDAR -->
-                    <include file="$(find-pkg-share svea_localization)/launch/lidar.xml">
+                    <!-- <include file="$(find-pkg-share svea_localization)/launch/lidar.xml">
                         <arg name="lidar_ip"    value="$(var lidar_ip)"/>
                         <arg name="lidar_frame" value="$(var name)/laser"/>
-                    </include>
+                    </include> -->
                 </group>
 
                 <!--mocap localization -->

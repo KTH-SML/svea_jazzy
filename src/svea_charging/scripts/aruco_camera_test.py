@@ -8,8 +8,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 import rclpy
+import yaml
+from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose, PoseArray
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import Int32MultiArray, String, Float32
 
 from svea_core import rosonic as rx
@@ -88,10 +90,29 @@ def load_calibration(calibration_file: Path | None):
     if calibration_file is None:
         return None, None
 
+    if calibration_file.suffix.lower() in {".yaml", ".yml"}:
+        with calibration_file.open("r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle)
+
+        try:
+            camera_matrix_data = data["camera_matrix"]["data"]
+            dist_coeffs_data = data["distortion_coefficients"]["data"]
+        except (TypeError, KeyError) as exc:
+            raise ValueError(
+                "Kalibreringsfilen måste innehålla 'camera_matrix.data' och "
+                "'distortion_coefficients.data' (.yaml)."
+            ) from exc
+
+        camera_matrix = np.array(camera_matrix_data, dtype=np.float32).reshape(3, 3)
+        dist_coeffs = np.array(dist_coeffs_data, dtype=np.float32).reshape(-1, 1)
+        return camera_matrix, dist_coeffs
+
     data = np.load(str(calibration_file))
     if "camera_matrix" not in data or "dist_coeffs" not in data:
         raise ValueError(
-            "Kalibreringsfilen måste innehålla 'camera_matrix' och 'dist_coeffs' (.npz)."
+            "Kalibreringsfilen måste innehålla 'camera_matrix' och 'dist_coeffs' "
+            "(.npz) eller ROS-formatet med 'camera_matrix.data' och "
+            "'distortion_coefficients.data' (.yaml)."
         )
 
     camera_matrix = data["camera_matrix"]
@@ -111,6 +132,17 @@ def get_fallback_camera_matrix(frame_shape, focal_length_px: float | None):
     )
     dist_coeffs = np.zeros((5, 1), dtype=np.float32)
     return camera_matrix, dist_coeffs
+
+
+def invert_camera_pose_to_marker_frame(rvec, tvec):
+    marker_to_camera_r = cv2.Rodrigues(np.asarray(rvec).reshape(3).astype(np.float64))[0]
+    tvec_camera = np.asarray(tvec).reshape(3, 1).astype(np.float64)
+
+    marker_position = (-marker_to_camera_r.T @ tvec_camera).reshape(-1)
+    marker_rotation = marker_to_camera_r.T
+    marker_rvec = cv2.Rodrigues(marker_rotation)[0]
+
+    return marker_position, marker_rvec
 
 
 def rvec_to_euler_deg(rvec):
@@ -187,16 +219,15 @@ class aruco_camera_test(rx.Node):
     output = rx.Parameter("aruco_marker.png")
     generate_marker_on_startup = rx.Parameter(False)
 
-    camera_index = rx.Parameter(0)
+    image_topic = rx.Parameter("/svea67/image_raw")
     marker_length_m = rx.Parameter(0.05)
     calibration_file = rx.Parameter("")
     focal_length_px = rx.Parameter(-1.0)
     display = rx.Parameter(False)
     loop_hz = rx.Parameter(30.0)
     frame_id = rx.Parameter("camera")
-    camera_backend = rx.Parameter("ANY")  # ANY, V4L2, GSTREAMER, FFMPEG
     use_aruco_detector_api = rx.Parameter(False)
-    publish_debug_image = rx.Parameter(True)
+    publish_debug_image = rx.Parameter(False)
     jpeg_quality = rx.Parameter(80)
 
     detected_ids_pub = rx.Publisher(Int32MultiArray, "aruco/detected_ids")
@@ -206,7 +237,8 @@ class aruco_camera_test(rx.Node):
     distance_pub = rx.Publisher(Float32, "aruco/distance_m")
 
     def on_startup(self):
-        self.cap = None
+        self.bridge = CvBridge()
+        self.latest_frame = None
         self._warned_fallback_intrinsics = False
 
         try:
@@ -259,37 +291,16 @@ class aruco_camera_test(rx.Node):
             self.get_logger().error(f"Calibration load failed: {exc}")
             self.calibrated_camera_matrix, self.calibrated_dist_coeffs = None, None
 
-        backend_name = str(self.camera_backend).upper()
-        backend_map = {
-            "ANY": getattr(cv2, "CAP_ANY", 0),
-            "V4L2": getattr(cv2, "CAP_V4L2", getattr(cv2, "CAP_ANY", 0)),
-            "GSTREAMER": getattr(cv2, "CAP_GSTREAMER", getattr(cv2, "CAP_ANY", 0)),
-            "FFMPEG": getattr(cv2, "CAP_FFMPEG", getattr(cv2, "CAP_ANY", 0)),
-        }
-        backend = backend_map.get(backend_name, getattr(cv2, "CAP_ANY", 0))
-        self.get_logger().info(
-            f"Opening camera index {int(self.camera_index)} with backend={backend_name}..."
+        self.create_subscription(
+            Image,
+            str(self.image_topic),
+            self._image_callback,
+            1,
         )
-        self.cap = cv2.VideoCapture(int(self.camera_index), backend)
-        if not self.cap.isOpened():
-            self.get_logger().error(
-                f"Could not open camera index {int(self.camera_index)} with backend={backend_name}"
-            )
-            self.cap.release()
-            self.cap = None
-            return
-
-        self.get_logger().info("Camera opened. Performing first frame read...")
-        ok, _ = self.cap.read()
-        if not ok:
-            self.get_logger().error("Camera opened but first frame read failed.")
-            self.cap.release()
-            self.cap = None
-            return
 
         self.get_logger().info(
             "ArUco camera node started "
-            f"(camera_index={int(self.camera_index)}, backend={backend_name}, dictionary={self.dictionary})"
+            f"(image_topic={self.image_topic}, dictionary={self.dictionary})"
         )
         if self._marker_length_m is not None and self.calibrated_camera_matrix is None:
             self.get_logger().warning(
@@ -300,11 +311,14 @@ class aruco_camera_test(rx.Node):
         self.create_timer(period, self.loop)
 
     def on_shutdown(self):
-        if getattr(self, "cap", None) is not None:
-            self.cap.release()
-            self.cap = None
         if bool(self.display):
             cv2.destroyAllWindows()
+
+    def _image_callback(self, msg: Image):
+        try:
+            self.latest_frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        except Exception as exc:
+            self.get_logger().error(f"Failed to convert image: {exc}")
 
     def _publish_status(self, text: str):
         msg = String()
@@ -339,15 +353,10 @@ class aruco_camera_test(rx.Node):
         self.debug_image_pub.publish(msg)
 
     def loop(self):
-        if self.cap is None:
+        if self.latest_frame is None:
             return
 
-        ok, frame = self.cap.read()
-        if not ok:
-            self._publish_ids([])
-            self.poses_pub.publish(self._empty_pose_array())
-            self._publish_status("camera_read_failed")
-            return
+        frame = self.latest_frame.copy()
 
         corners, ids, rejected = detect_markers(
             self.aruco,
@@ -391,14 +400,15 @@ class aruco_camera_test(rx.Node):
                 for i, marker_id in enumerate(ids.flatten()):
                     rvec = rvecs[i]
                     tvec = tvecs[i]
-                    txyz = np.asarray(tvec).reshape(-1)
-                    qxyzw = rvec_to_quaternion_xyzw(rvec)
-                    roll_deg, pitch_deg, yaw_deg = rvec_to_euler_deg(rvec)
+                    marker_txyz, marker_rvec = invert_camera_pose_to_marker_frame(rvec, tvec)
+                    marker_rvec = np.asarray(marker_rvec).reshape(3)
+                    qxyzw = rvec_to_quaternion_xyzw(marker_rvec)
+                    roll_deg, pitch_deg, yaw_deg = rvec_to_euler_deg(marker_rvec)
 
                     pose = Pose()
-                    pose.position.x = float(txyz[0])
-                    pose.position.y = float(txyz[1])
-                    pose.position.z = float(txyz[2])
+                    pose.position.x = float(marker_txyz[0])
+                    pose.position.y = float(marker_txyz[2])
+                    pose.position.z = float(marker_txyz[1])
                     pose.orientation.x = float(qxyzw[0])
                     pose.orientation.y = float(qxyzw[1])
                     pose.orientation.z = float(qxyzw[2])
@@ -416,7 +426,7 @@ class aruco_camera_test(rx.Node):
 
                     anchor = corners[i][0][0]
                     x_px, y_px = int(anchor[0]), int(anchor[1])
-                    distance_m = float(np.linalg.norm(txyz))
+                    distance_m = float(np.linalg.norm(marker_txyz))
                     lines = [
                         f"ID {int(marker_id)}: {distance_m:.2f} m",
                         f"R/P/Y: {roll_deg:.0f}/{pitch_deg:.0f}/{yaw_deg:.0f} deg",

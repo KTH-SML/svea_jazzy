@@ -1,195 +1,123 @@
-import time
-from svea_charging.third_party.btree import NodeStatus, Node, ActionNode, Sequence, Fallback #imported behaviour tree implementation from Elisa Bin's repo: https://github.com/elisabin/btree
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from svea_charging.third_party.btree.btree import (
+    ActionNode,
+    Fallback,
+    NodeStatus,
+    Sequence,
+)
 
 
+@dataclass
+class MissionBlackboard:
+    battery_level: float = 20.0
+    battery_current: float = -1.0
+    battery_voltage: float = 12.0
+    communication_ok: bool = True
+    charger_visible: bool = False
+    line_visible: bool = False
+    charging_active: bool = False
+    charging_error: bool = False
+    dist_to_station: float | None = None
+    aruco_distance: float | None = None
+    switch_distance_m: float = 2.8
+    dock_distance_m: float = 1.6
+    active_controller: str = "stanley"
+    mission_phase: str = "approach"
+    last_tree_status: str = NodeStatus.RUNNING
+    last_running_node: str = "startup"
 
-class Btree:
-    def __init__(self, defaultBatteryLevel=20.0, communicationStatus = True):
-        self.batteryLevel = float(defaultBatteryLevel) #percentage, we could change this
-        self.communicationStatus = communicationStatus
-        self.chargerVisible = False
-        self.vehicleAligned = False
-        self.chargingActive = False
-        self.chargingError = False
-        self.tickingFreqency = 10.0 #Hz
-        self.period = 1.0 / self.tickingFrequency
-        self.batteryLevelUpperThreshold = 80.0 #percentage
-        self.batteryLevelLowerThreshold = 20.0 #percentage
-        self.max_ticks = 100 #is this necessary?? ASK KAJ. max number of ticks before we stop the process, can be changed depending on how long we want to run the process for
 
-        # the tree should be built according to our logic, and should use the functions defined below as leaf nodes
+class ChargingMissionTree:
+    """
+    Minimal behaviour tree for controller handoff during charging approach.
+
+    The tree is intentionally small so it can become the logic owner today and
+    grow with new leaves later. It currently owns:
+    - controller selection: Stanley -> line follower
+    - proximity-based switching
+    - simple docking completion
+    - communication guard
+    """
+   
+    def __init__(self, blackboard: MissionBlackboard):
+        self.bb = blackboard
         self.tree = Sequence(
-            Sequence(
-                Fallback(
-                    ActionNode(self.communicationOk),
-                    ActionNode(self.alertCommunicationError),
-                    name="communicationGuard",
-                ),
-                Fallback(
-                    ActionNode(self.atChargingArea),
-                    ActionNode(self.alertChargingAreaError),
-                    name="chargingAreaCheck",
-                ),
+            Fallback(
+                ActionNode(self.communication_ok, "communication_ok"),
+                ActionNode(self.handle_communication_error, "handle_communication_error"),
+                name="communication_guard",
             ),
-            Sequence(
-                Fallback(
-                    ActionNode(self.inProximityArea),
-                    ActionNode(self.driveToProximityArea),
-                    name="proximityAreaCheck",
-                ),
-                Fallback(
-                    ActionNode(self.vehicleDocked),
-                    ActionNode(self.dockVehicle),
-                    name="docking",
-                ),
+            Fallback(
+                ActionNode(self.is_near_docking_zone, "is_near_docking_zone"),
+                ActionNode(self.run_stanley_approach, "run_stanley_approach"),
+                name="approach_phase",
             ),
-            Sequence(
-                Fallback(
-                    ActionNode(self.chargingProcessOk),
-                    ActionNode(self.alertChargingError),
-                    name="chargingProcessCheck",
-                ),
-                Sequence(
-                    ActionNode(self.doneCharging),
-                    ActionNode(self.undockVehicle),
-                    name="undocking",
-                ),
+            Fallback(
+                ActionNode(self.is_docked, "is_docked"),
+                ActionNode(self.run_line_follower_docking, "run_line_follower_docking"),
+                name="docking_phase",
             ),
-            name = "root"
+            name="charging_mission",
         )
 
+    def tick(self) -> str:
+        status = self.tree.run()
+        self.bb.last_tree_status = status
+        self.bb.last_running_node = self._current_running_node_name()
+        return status
 
-
-    def tick(self):
-        self.tree.tick()
-        time.sleep(self.period) #should this sleep here? idk if this is the approach. ASK KAJ and Elisa
-
-    
     @property
-    def state(self):
-        return self.tree.currentRunningNode.name
+    def state(self) -> str:
+        return self.bb.last_running_node
 
+    def communication_ok(self) -> str:
+        return NodeStatus.SUCCESS if self.bb.communication_ok else NodeStatus.FAILURE
 
-    #condition
-    def communicationOk(self):
-        #check if communication with the car is ok
-        if self.communicationStatus:
-            return NodeStatus.SUCCESS
-        else:
-            return NodeStatus.FAILURE
+    def handle_communication_error(self) -> str:
+        self.bb.active_controller = "idle"
+        self.bb.mission_phase = "communication_error"
+        return NodeStatus.FAILURE
+
+    def is_near_docking_zone(self) -> str:
         
-    #action
-    def alertCommunicationError(self):
-        #alert the user that communication with the car is not ok, check with Kaj what is the best way to do handle this
-        print("ALERT: Communication issues.")
-        return NodeStatus.FAILURE #How should we handle this? Should we return FAILURE here, or SUCCESS since we have alerted the user? ASK KAJ and Elisa
-
-    #condition
-    def atChargingArea(self):
-        #check if vehicle is in CA (Charging Area)
-        if True: #should change this to check if we are in the charging area
-            return NodeStatus.SUCCESS
-        else:
-            print("Vehicle is not in the charging area.")
+        distance = self.bb.aruco_distance
+        if distance is None:
             return NodeStatus.FAILURE
-
-    #action
-    def alertChargingAreaError(self):
-        #alert the user that the vehicle is not in the charging area
-        print("ALERT: Vehicle is not in the charging area.")
-        return NodeStatus.FAILURE #How should we handle this? Should we return FAILURE here, or SUCCESS since we have alerted the user? ASK KAJ and Elisa
-
-
-    #condition
-    def inProximityArea(self):
-        #check if vehicle is in PA (Proximity Area)
-        if True: #should change this to check if we are in the proximity area
+        if distance <= self.bb.switch_distance_m:
+            
+            self.bb.mission_phase = "docking"
             return NodeStatus.SUCCESS
-        else:
-            print("Vehicle is not in the proximity area.")
-            return NodeStatus.FAILURE
+        return NodeStatus.FAILURE
 
-    #action
-    def driveToProximityArea(self):
-        #some action that would drive the vehicle to the proximity area
-        try:
-            print("Driving to the proximity area...")
-            #should add code here to drive to the proximity area
+    def run_stanley_approach(self) -> str:
+        self.bb.active_controller = "stanley"
+        self.bb.mission_phase = "approach"
+        return NodeStatus.RUNNING
+
+    def is_docked(self) -> str:
+        aruco_distance = self.bb.aruco_distance
+        if aruco_distance is None:
+            return NodeStatus.FAILURE
+        if self.bb.battery_current > -0.5:
+            self.bb.active_controller = "idle"
+            self.bb.mission_phase = "docked"
+            return NodeStatus.SUCCESS
+        return NodeStatus.FAILURE
+
+    def run_line_follower_docking(self) -> str:
+        self.bb.active_controller = "line_follower"
+        self.bb.mission_phase = "docking"
+
+        if self.bb.charger_visible and self.bb.line_visible:
             return NodeStatus.RUNNING
-        except Exception as e:
-            print(f"Error while driving to the proximity area: {e}")
-            return NodeStatus.FAILURE
-        
 
-    #condition
-    def vehicleDocked(self):
-        #check if the vehicle is docked and have contact with the charger
-        if self.vehicleDockedStatus:
-            return NodeStatus.SUCCESS
-        else:
-            print("Vehicle is not docked with the charger yet.")
-            return NodeStatus.FAILURE
+        return NodeStatus.FAILURE
 
-    #action
-    def dockVehicle(self):
-        #some action that would dock the vehicle
-        try:
-            if self.vehicleDockedStatus:
-                print("Vehicle is now docked with the charger.")
-                return NodeStatus.SUCCESS
-            print("Docking with the charger...")
-            #should add docking code here, and set self.vehicleDockedStatus to True when we are docked with the charger
-            return NodeStatus.RUNNING
-        except Exception as e:
-            print(f"Error while docking with the charger: {e}")
-            return NodeStatus.FAILURE
-
-    #condition
-    def chargingProcessOk(self):
-        #check if the charging process is going ok
-        if self.chargingError: # check with Kaj and Nils. add another method which enables chargingError when anomalies are detected.
-            return NodeStatus.FAILURE
-        else:
-            return NodeStatus.SUCCESS
-
-    #action
-    def alertChargingError(self):
-        #alert the user that the charging process is not going ok
-        print("ALERT: Charging process issues detected.")
-        return NodeStatus.FAILURE #How should we handle this? Should we return FAILURE here, or SUCCESS since we have alerted the user? ASK KAJ
-    
-    #condition
-    def doneCharging(self):
-        #check if the battery is sufficiently charged
-        if self.batteryLevel >= self.batteryLevelUpperThreshold:
-            return NodeStatus.SUCCESS
-        else:
-            print("Battery is not sufficiently charged yet.")
-            return NodeStatus.FAILURE
-
-    def undockVehicle(self):
-        #some action that would undock the vehicle
-        try:
-            if not self.vehicleDockedStatus:
-                print("Vehicle is now undocked from the charger.")
-                return NodeStatus.SUCCESS
-            print("Undocking from the charger...")
-            #should add undocking code here, and set self.vehicleDockedStatus to False when we are undocked from the charger
-            return NodeStatus.RUNNING
-        except Exception as e:
-            print(f"Error while undocking from the charger: {e}")
-            return NodeStatus.FAILURE
-        
-
-    def run(self):
-        for tick in range(self.max_ticks):
-            print(f"--- TICK {tick} ---")
-            status = self.tree.run()               # one full evaluation
-            print(f"* Tree returned: {status}\n")
-            time.sleep(self.period)
-            if status == NodeStatus.SUCCESS:
-                print("Charging process completed successfully.")
-                break
-            elif status == NodeStatus.FAILURE:
-                print("Charging process failed.")
-                break
+    def _current_running_node_name(self) -> str:
+        current = getattr(self.tree, "currentRunningNode", None)
+        if current is None:
+            return self.bb.mission_phase
+        return getattr(current, "name", self.bb.mission_phase)

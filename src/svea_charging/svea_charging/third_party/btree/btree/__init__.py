@@ -15,6 +15,9 @@ class NodeStatus:
     RUNNING = "RUNNING"
 
 
+TRACE_ENABLED = False
+
+
 class Node(ABC):
     currentRunningNode: Node | None = None
     @abstractmethod
@@ -41,7 +44,8 @@ class ActionNode(Node):
         else:
             self.currentRunningNode = None
 
-        print(f"  {self.name}: {status}")
+        if TRACE_ENABLED:
+            print(f"  {self.name}: {status}")
         return status
 
 
@@ -67,7 +71,8 @@ class Composite(Node):
 
     # shared utility for readable debug output
     def _trace(self, msg: str) -> None:
-        print(f"{self.name}: {msg}")
+        if TRACE_ENABLED:
+            print(f"{self.name}: {msg}")
 
 
 class Fallback(Composite):
