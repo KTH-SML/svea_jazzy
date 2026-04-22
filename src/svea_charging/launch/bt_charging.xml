@@ -27,9 +27,10 @@
     <arg name="aruco_output" default="aruco_marker.png"/>
     <arg name="aruco_calibration_file" default="/svea_ws/src/svea_charging/params/camera.yaml"/>
     <arg name="aruco_focal_length_px" default="-1.0"/>
+    <arg name="svea_mocap_name" default="svea67"/> 
 
-    <arg name="bt_switch_distance_m" default="3.3"/>
-    <arg name="bt_dock_distance_m" default="1.6"/>
+    <arg name="bt_switch_distance_m" default="3.0"/>
+    <arg name="bt_dock_distance_m" default="1.63"/>
 
     <include file="$(find-pkg-share svea_core)/launch/map_and_foxglove.xml">
         <arg name="map" value="$(var map)" />
@@ -75,10 +76,16 @@
             <param name="localization/base_frame" value="$(var name)/base_link"/>
         </node>
 
-        <node name="line_follower" pkg="svea_charging" exec="line_follower.py" output="screen">
+        <node name="mpc" pkg="svea_charging" exec="mpc.py" output="screen">
             <param name="use_rviz" value="$(var use_foxglove)"/>
             <param name="is_sim" value="$(var is_sim)"/>
-            <param name="image_topic" value="$(var camera_image_topic)"/>
+            <param name="localization/base_frame" value="$(var name)/base_link"/>
+            <param name="mpc_freq" value="10"/>
+            <param name="target_speed" value="0.3"/>
+            <param name="delta_s"  value="5"/>
+            <param name="svea_mocap_name" value="$(var svea_mocap_name)"/>
+            <param name="mpc_config_ns" value="~mpc"/>
+            <param from="$(find-pkg-share svea_core)/params/mpc_default.yaml" />
         </node>
 
         <node name="bt_runner" pkg="svea_charging" exec="bt_runner.py" output="screen">
@@ -103,7 +110,7 @@
 
         <push-ros-namespace namespace="$(var name)"/>
 
-        <node name="usb_cam_node" pkg="usb_cam" exec="usb_cam_node_exe" output="screen">
+        <!-- <node name="usb_cam_node" pkg="usb_cam" exec="usb_cam_node_exe" output="screen">
             <param name="video_device" value="/dev/video0"/>
             <param name="frame_id" value="camera"/>
             <param name="pixel_format" value="mjpeg2rgb"/>
@@ -122,7 +129,7 @@
 
             <remap from="/image_raw" to="$(var camera_image_topic)"/>
             <remap from="/camera_info" to="/camera/camera_info"/>
-        </node>
+        </node> -->
 
         <node name="aruco_camera_test" if="$(var use_aruco_camera)" pkg="svea_charging" exec="aruco_camera_test.py" output="screen">
             <param name="dictionary" value="$(var aruco_dictionary)"/>
@@ -149,10 +156,23 @@
             <param name="localization/base_frame" value="$(var name)/base_link"/>
         </node>
 
-        <node name="line_follower" pkg="svea_charging" exec="line_follower.py" output="screen">
+        <!-- <node name="stanleyLlc" pkg="svea_charging" exec="Stanleyllc.py" output="screen">
             <param name="use_rviz" value="$(var use_foxglove)"/>
             <param name="is_sim" value="$(var is_sim)"/>
-            <param name="image_topic" value="$(var camera_image_topic)"/>
+            <param name="use_mocap" value="$(var use_mocap)"/>
+            <param name="localization/base_frame" value="$(var name)/base_link"/>
+        </node> -->
+
+        <node name="mpc" pkg="svea_charging" exec="mpc.py" output="screen">
+            <param name="use_rviz" value="$(var use_foxglove)"/>
+            <param name="is_sim" value="$(var is_sim)"/>
+            <param name="localization/base_frame" value="$(var name)/base_link"/>
+            <param name="mpc_freq" value="10"/> 
+            <param name="target_speed" value="0.2"/>
+            <param name="delta_s"  value="0.4"/>
+            <param name="svea_mocap_name" value="$(var svea_mocap_name)"/>
+            <param name="mpc_config_ns" value="~mpc"/>
+            <param from="$(find-pkg-share svea_core)/params/mpc_default.yaml" />
         </node>
 
         <node name="bt_runner" pkg="svea_charging" exec="bt_runner.py" output="screen">

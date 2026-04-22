@@ -80,7 +80,7 @@
 
     # The min/max velocity allowed for SVEA (unit [m/s^2])
     velocity_min: -0.4
-    velocity_max: 0.4
+    velocity_max: 0.3
 
     # The min/max acceleration allowed for SVEA (unit [m/s^2])
     acceleration_min: -0.2

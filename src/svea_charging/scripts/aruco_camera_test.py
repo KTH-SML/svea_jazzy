@@ -9,9 +9,8 @@ import cv2
 import numpy as np
 import rclpy
 import yaml
-from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose, PoseArray
-from sensor_msgs.msg import CompressedImage, Image
+from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Int32MultiArray, String, Float32
 
 from svea_core import rosonic as rx
@@ -84,6 +83,40 @@ def detect_markers(aruco, detector, parameters, dictionary, frame):
     if parameters is None:
         return aruco.detectMarkers(frame, dictionary)
     return aruco.detectMarkers(frame, dictionary, parameters=parameters)
+
+
+def refine_detected_corners(
+    frame_gray,
+    corners,
+    *,
+    enabled: bool,
+    window_size: int,
+    max_iterations: int,
+    epsilon: float,
+):
+    if not enabled or frame_gray is None or corners is None:
+        return corners
+
+    refined_corners = []
+    win_size = max(1, int(window_size))
+    criteria = (
+        cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,
+        max(1, int(max_iterations)),
+        max(float(epsilon), 1e-6),
+    )
+
+    for corner in corners:
+        corner_points = np.asarray(corner, dtype=np.float32).reshape(-1, 1, 2)
+        cv2.cornerSubPix(
+            frame_gray,
+            corner_points,
+            (win_size, win_size),
+            (-1, -1),
+            criteria,
+        )
+        refined_corners.append(corner_points.reshape(1, -1, 2))
+
+    return refined_corners
 
 
 def load_calibration(calibration_file: Path | None):
@@ -197,6 +230,47 @@ def rvec_to_quaternion_xyzw(rvec):
     return rotation_matrix_to_quaternion(rot_mat)
 
 
+def normalize_quaternion_xyzw(quaternion):
+    quaternion = np.asarray(quaternion, dtype=np.float64).reshape(4)
+    norm = np.linalg.norm(quaternion)
+    if norm < 1e-9:
+        return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+    return quaternion / norm
+
+
+def nlerp_quaternion_xyzw(previous, current, alpha: float):
+    previous = normalize_quaternion_xyzw(previous)
+    current = normalize_quaternion_xyzw(current)
+
+    if float(np.dot(previous, current)) < 0.0:
+        current = -current
+
+    blended = (1.0 - alpha) * previous + alpha * current
+    return normalize_quaternion_xyzw(blended)
+
+
+def quaternion_xyzw_to_rotation_matrix(quaternion):
+    x, y, z, w = normalize_quaternion_xyzw(quaternion)
+    return np.array(
+        [
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+            [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
+            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
+        ],
+        dtype=np.float64,
+    )
+
+
+def marker_frame_pose_to_camera_frame(marker_position, marker_quaternion_xyzw):
+    marker_rotation = quaternion_xyzw_to_rotation_matrix(marker_quaternion_xyzw)
+    marker_to_camera_r = marker_rotation.T
+    tvec_camera = (
+        -marker_to_camera_r @ np.asarray(marker_position, dtype=np.float64).reshape(3, 1)
+    )
+    rvec_camera = cv2.Rodrigues(marker_to_camera_r)[0]
+    return rvec_camera, tvec_camera
+
+
 def estimate_pose_for_markers(aruco, corners, marker_length_m, camera_matrix, dist_coeffs):
     if hasattr(aruco, "estimatePoseSingleMarkers"):
         rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
@@ -219,16 +293,22 @@ class aruco_camera_test(rx.Node):
     output = rx.Parameter("aruco_marker.png")
     generate_marker_on_startup = rx.Parameter(False)
 
-    image_topic = rx.Parameter("/svea67/image_raw")
+    camera_index = rx.Parameter(0)
     marker_length_m = rx.Parameter(0.05)
     calibration_file = rx.Parameter("")
     focal_length_px = rx.Parameter(-1.0)
     display = rx.Parameter(False)
     loop_hz = rx.Parameter(30.0)
     frame_id = rx.Parameter("camera")
+    camera_backend = rx.Parameter("ANY")  # ANY, V4L2, GSTREAMER, FFMPEG
     use_aruco_detector_api = rx.Parameter(False)
-    publish_debug_image = rx.Parameter(False)
+    publish_debug_image = rx.Parameter(True)
     jpeg_quality = rx.Parameter(80)
+    refine_corners_subpix = rx.Parameter(True)
+    subpix_window_size = rx.Parameter(5)
+    subpix_max_iterations = rx.Parameter(30)
+    subpix_epsilon = rx.Parameter(0.01)
+    pose_filter_alpha = rx.Parameter(0.35)
 
     detected_ids_pub = rx.Publisher(Int32MultiArray, "aruco/detected_ids")
     poses_pub = rx.Publisher(PoseArray, "aruco/poses")
@@ -237,9 +317,17 @@ class aruco_camera_test(rx.Node):
     distance_pub = rx.Publisher(Float32, "aruco/distance_m")
 
     def on_startup(self):
-        self.bridge = CvBridge()
-        self.latest_frame = None
+        self.cap = None
         self._warned_fallback_intrinsics = False
+        self._target_marker_id = int(self.marker_id)
+        self._filtered_position = None
+        self._filtered_quaternion = None
+        self._refine_corners_subpix = bool(self.refine_corners_subpix)
+        self._subpix_window_size = int(self.subpix_window_size)
+        self._subpix_max_iterations = int(self.subpix_max_iterations)
+        self._subpix_epsilon = float(self.subpix_epsilon)
+        pose_filter_alpha = float(self.pose_filter_alpha)
+        self._pose_filter_alpha = 1.0 if pose_filter_alpha <= 0.0 else min(pose_filter_alpha, 1.0)
 
         try:
             self.get_logger().info("Initializing OpenCV ArUco module...")
@@ -291,16 +379,41 @@ class aruco_camera_test(rx.Node):
             self.get_logger().error(f"Calibration load failed: {exc}")
             self.calibrated_camera_matrix, self.calibrated_dist_coeffs = None, None
 
-        self.create_subscription(
-            Image,
-            str(self.image_topic),
-            self._image_callback,
-            1,
+        backend_name = str(self.camera_backend).upper()
+        backend_map = {
+            "ANY": getattr(cv2, "CAP_ANY", 0),
+            "V4L2": getattr(cv2, "CAP_V4L2", getattr(cv2, "CAP_ANY", 0)),
+            "GSTREAMER": getattr(cv2, "CAP_GSTREAMER", getattr(cv2, "CAP_ANY", 0)),
+            "FFMPEG": getattr(cv2, "CAP_FFMPEG", getattr(cv2, "CAP_ANY", 0)),
+        }
+        backend = backend_map.get(backend_name, getattr(cv2, "CAP_ANY", 0))
+        self.get_logger().info(
+            f"Opening camera index {int(self.camera_index)} with backend={backend_name}..."
         )
+        self.cap = cv2.VideoCapture(int(self.camera_index), backend)
+        if not self.cap.isOpened():
+            self.get_logger().error(
+                f"Could not open camera index {int(self.camera_index)} with backend={backend_name}"
+            )
+            self.cap.release()
+            self.cap = None
+            return
+
+        self.get_logger().info("Camera opened. Performing first frame read...")
+        ok, _ = self.cap.read()
+        if not ok:
+            self.get_logger().error("Camera opened but first frame read failed.")
+            self.cap.release()
+            self.cap = None
+            return
 
         self.get_logger().info(
             "ArUco camera node started "
-            f"(image_topic={self.image_topic}, dictionary={self.dictionary})"
+            f"(camera_index={int(self.camera_index)}, backend={backend_name}, dictionary={self.dictionary})"
+        )
+        self.get_logger().info(
+            "Pose stabilization "
+            f"(subpix={self._refine_corners_subpix}, pose_filter_alpha={self._pose_filter_alpha:.2f})"
         )
         if self._marker_length_m is not None and self.calibrated_camera_matrix is None:
             self.get_logger().warning(
@@ -311,14 +424,11 @@ class aruco_camera_test(rx.Node):
         self.create_timer(period, self.loop)
 
     def on_shutdown(self):
+        if getattr(self, "cap", None) is not None:
+            self.cap.release()
+            self.cap = None
         if bool(self.display):
             cv2.destroyAllWindows()
-
-    def _image_callback(self, msg: Image):
-        try:
-            self.latest_frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-        except Exception as exc:
-            self.get_logger().error(f"Failed to convert image: {exc}")
 
     def _publish_status(self, text: str):
         msg = String()
@@ -352,32 +462,89 @@ class aruco_camera_test(rx.Node):
         msg.data = enc.tobytes()
         self.debug_image_pub.publish(msg)
 
+    def _reset_pose_filter(self):
+        self._filtered_position = None
+        self._filtered_quaternion = None
+
+    def _filter_pose(self, position_xyz, quaternion_xyzw):
+        position_xyz = np.asarray(position_xyz, dtype=np.float64).reshape(3)
+        quaternion_xyzw = normalize_quaternion_xyzw(quaternion_xyzw)
+
+        if self._pose_filter_alpha >= 1.0:
+            self._filtered_position = position_xyz.copy()
+            self._filtered_quaternion = quaternion_xyzw.copy()
+            return position_xyz, quaternion_xyzw
+
+        if self._filtered_position is None or self._filtered_quaternion is None:
+            self._filtered_position = position_xyz.copy()
+            self._filtered_quaternion = quaternion_xyzw.copy()
+            return self._filtered_position.copy(), self._filtered_quaternion.copy()
+
+        alpha = self._pose_filter_alpha
+        self._filtered_position = (
+            (1.0 - alpha) * self._filtered_position + alpha * position_xyz
+        )
+        self._filtered_quaternion = nlerp_quaternion_xyzw(
+            self._filtered_quaternion, quaternion_xyzw, alpha
+        )
+        return self._filtered_position.copy(), self._filtered_quaternion.copy()
+
     def loop(self):
-        if self.latest_frame is None:
+        if self.cap is None:
             return
 
-        frame = self.latest_frame.copy()
+        ok, frame = self.cap.read()
+        if not ok:
+            self._reset_pose_filter()
+            self._publish_ids([])
+            self.poses_pub.publish(self._empty_pose_array())
+            self._publish_status("camera_read_failed")
+            return
 
+        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         corners, ids, rejected = detect_markers(
             self.aruco,
             self.detector,
             self.detector_parameters,
             self.dictionary_obj,
-            frame,
+            frame_gray,
+        )
+        corners = refine_detected_corners(
+            frame_gray,
+            corners,
+            enabled=self._refine_corners_subpix,
+            window_size=self._subpix_window_size,
+            max_iterations=self._subpix_max_iterations,
+            epsilon=self._subpix_epsilon,
         )
 
         ids_list = []
+        distance_m = -1.0
         pose_array = self._empty_pose_array()
         status_text = ""
         overlay_color = (0, 0, 255)
 
         if ids is not None and len(ids) > 0:
-            ids_list = [int(i) for i in ids.flatten()]
-            self.aruco.drawDetectedMarkers(frame, corners, ids)
-            status_text = f"Detected IDs: {ids_list}"
-            overlay_color = (0, 200, 0)
+            detected_ids = ids.flatten()
+            target_indices = [
+                i for i, detected_id in enumerate(detected_ids)
+                if int(detected_id) == self._target_marker_id
+            ]
 
-            if self._marker_length_m is not None:
+            if target_indices:
+                filtered_corners = [corners[i] for i in target_indices]
+                filtered_ids = np.array(
+                    [[int(detected_ids[i])] for i in target_indices],
+                    dtype=ids.dtype,
+                )
+                ids_list = [int(detected_ids[i]) for i in target_indices]
+                self.aruco.drawDetectedMarkers(frame, filtered_corners, filtered_ids)
+                status_text = f"Detected target ID: {ids_list}"
+                overlay_color = (0, 200, 0)
+            else:
+                status_text = f"Marker {self._target_marker_id} not detected"
+
+            if target_indices and self._marker_length_m is not None:
                 if self.calibrated_camera_matrix is None:
                     camera_matrix, dist_coeffs = get_fallback_camera_matrix(
                         frame.shape, self._focal_length_px
@@ -391,42 +558,52 @@ class aruco_camera_test(rx.Node):
 
                 rvecs, tvecs = estimate_pose_for_markers(
                     self.aruco,
-                    corners,
+                    filtered_corners,
                     self._marker_length_m,
                     camera_matrix,
                     dist_coeffs,
                 )
 
-                for i, marker_id in enumerate(ids.flatten()):
+                for i, marker_id in enumerate(filtered_ids.flatten()):
                     rvec = rvecs[i]
                     tvec = tvecs[i]
                     marker_txyz, marker_rvec = invert_camera_pose_to_marker_frame(rvec, tvec)
                     marker_rvec = np.asarray(marker_rvec).reshape(3)
-                    qxyzw = rvec_to_quaternion_xyzw(marker_rvec)
-                    roll_deg, pitch_deg, yaw_deg = rvec_to_euler_deg(marker_rvec)
+                    filtered_position, filtered_quaternion = self._filter_pose(
+                        marker_txyz,
+                        rvec_to_quaternion_xyzw(marker_rvec),
+                    )
+                    filtered_marker_rvec = cv2.Rodrigues(
+                        quaternion_xyzw_to_rotation_matrix(filtered_quaternion)
+                    )[0]
+                    filtered_rvec, filtered_tvec = marker_frame_pose_to_camera_frame(
+                        filtered_position,
+                        filtered_quaternion,
+                    )
+                    roll_deg, pitch_deg, yaw_deg = rvec_to_euler_deg(filtered_marker_rvec)
 
                     pose = Pose()
-                    pose.position.x = float(marker_txyz[0])
-                    pose.position.y = float(marker_txyz[2])
-                    pose.position.z = float(marker_txyz[1])
-                    pose.orientation.x = float(qxyzw[0])
-                    pose.orientation.y = float(qxyzw[1])
-                    pose.orientation.z = float(qxyzw[2])
-                    pose.orientation.w = float(qxyzw[3])
+                    pose.position.x = float(filtered_position[0])
+                    pose.position.y = float(filtered_position[1])
+                    pose.position.z = float(filtered_position[2])
+                    pose.orientation.x = float(filtered_quaternion[0])
+                    pose.orientation.y = float(filtered_quaternion[1])
+                    pose.orientation.z = float(filtered_quaternion[2])
+                    pose.orientation.w = float(filtered_quaternion[3])
                     pose_array.poses.append(pose)
 
                     draw_axes(
                         frame,
                         camera_matrix,
                         dist_coeffs,
-                        rvec,
-                        tvec,
+                        filtered_rvec,
+                        filtered_tvec,
                         axis_length_m=max(self._marker_length_m * 0.5, 0.02),
                     )
 
-                    anchor = corners[i][0][0]
+                    anchor = filtered_corners[i][0][0]
                     x_px, y_px = int(anchor[0]), int(anchor[1])
-                    distance_m = float(np.linalg.norm(marker_txyz))
+                    distance_m = float(np.linalg.norm(filtered_position))
                     lines = [
                         f"ID {int(marker_id)}: {distance_m:.2f} m",
                         f"R/P/Y: {roll_deg:.0f}/{pitch_deg:.0f}/{yaw_deg:.0f} deg",
@@ -442,7 +619,10 @@ class aruco_camera_test(rx.Node):
                             2,
                             cv2.LINE_AA,
                         )
+            else:
+                self._reset_pose_filter()
         else:
+            self._reset_pose_filter()
             rejected_count = len(rejected) if rejected is not None else 0
             status_text = f"No markers | rejected: {rejected_count}"
 

@@ -17,7 +17,6 @@ class MissionBlackboard:
     battery_voltage: float = 12.0
     communication_ok: bool = True
     charger_visible: bool = False
-    line_visible: bool = False
     charging_active: bool = False
     charging_error: bool = False
     dist_to_station: float | None = None
@@ -36,7 +35,7 @@ class ChargingMissionTree:
 
     The tree is intentionally small so it can become the logic owner today and
     grow with new leaves later. It currently owns:
-    - controller selection: Stanley -> line follower
+    - controller selection: Stanley -> MPC
     - proximity-based switching
     - simple docking completion
     - communication guard
@@ -57,7 +56,7 @@ class ChargingMissionTree:
             ),
             Fallback(
                 ActionNode(self.is_docked, "is_docked"),
-                ActionNode(self.run_line_follower_docking, "run_line_follower_docking"),
+                ActionNode(self.run_mpc_docking, "run_mpc_docking"),
                 name="docking_phase",
             ),
             name="charging_mission",
@@ -82,15 +81,12 @@ class ChargingMissionTree:
         return NodeStatus.FAILURE
 
     def is_near_docking_zone(self) -> str:
-        
         distance = self.bb.aruco_distance
-        if distance is None:
+        if distance is None or distance > self.bb.switch_distance_m:
             return NodeStatus.FAILURE
-        if distance <= self.bb.switch_distance_m:
-            
-            self.bb.mission_phase = "docking"
-            return NodeStatus.SUCCESS
-        return NodeStatus.FAILURE
+
+        self.bb.mission_phase = "docking"
+        return NodeStatus.SUCCESS
 
     def run_stanley_approach(self) -> str:
         self.bb.active_controller = "stanley"
@@ -101,17 +97,17 @@ class ChargingMissionTree:
         aruco_distance = self.bb.aruco_distance
         if aruco_distance is None:
             return NodeStatus.FAILURE
-        if self.bb.battery_current > -0.85:
+        if self.bb.battery_current > -0.5:
             self.bb.active_controller = "idle"
             self.bb.mission_phase = "docked"
             return NodeStatus.SUCCESS
         return NodeStatus.FAILURE
 
-    def run_line_follower_docking(self) -> str:
-        self.bb.active_controller = "line_follower"
+    def run_mpc_docking(self) -> str:
+        self.bb.active_controller = "mpc"
         self.bb.mission_phase = "docking"
 
-        if self.bb.charger_visible and self.bb.line_visible:
+        if self.bb.charger_visible:
             return NodeStatus.RUNNING
 
         return NodeStatus.FAILURE
