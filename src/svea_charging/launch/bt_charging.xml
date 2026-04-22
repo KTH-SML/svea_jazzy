@@ -111,7 +111,7 @@
             <param name="image_height" value="480"/>
             <param name="framerate" value="30.0"/>
             <param name="camera_info_url" value="file:///svea_ws/src/svea_charging/params/camera.yaml"/>
-            <param name="brightness" value="120"/>
+            <param name="brightness" value="150"/>
             <param name="gain" value="10"/>
             <param name="auto_white_balance" value="false"/>
             <param name="white_balance" value="4000"/>

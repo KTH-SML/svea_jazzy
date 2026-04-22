@@ -72,7 +72,7 @@ class line_follower(rx.Node):
     velocity_cmd_topic = rx.Parameter("line_follower/cmd_velocity_mps")
 
 
-    publish_debug_image = rx.Parameter(False)
+    publish_debug_image = rx.Parameter(True)
     debug_image_topic = rx.Parameter("line_follower/debug_image")
     debug_publish_every_n = rx.Parameter(3)
 
@@ -311,6 +311,7 @@ class line_follower(rx.Node):
             self.aruco_velocity_kp = 2.0
         else:
                 self.aruco_velocity_kp = 0.5
+
         self.distance_cmd_pub.publish(Float32(data=float(desired_velocity)))
 
         _, _, _, vel = self.localizer.get_state()

@@ -36,7 +36,7 @@ class bt_runner(rx.Node):
     tick_hz = rx.Parameter(20.0)
     switch_distance_m = rx.Parameter(3.8)
     dock_distance_m = rx.Parameter(1.6)
-    docking_timeout_s = rx.Parameter(50.0)
+    docking_timeout_s = rx.Parameter(10000.0)
     docking_goal_x = rx.Parameter(1.8808068847589485)
     docking_goal_y = rx.Parameter(1.345089355475518)
     docking_goal_yaw_deg = rx.Parameter(0.0)
