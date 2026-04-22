@@ -8,6 +8,7 @@
     <arg name="initial_pose_x"          default="0.0"/>
     <arg name="initial_pose_y"          default="0.0"/>
     <arg name="initial_pose_a"          default="0.0"/>
+    <arg name="mocap_server_address"    default="10.0.0.10"/>
 
     <!-- When indoors, map_file is required -->
     <group if="$(var is_indoor)">
@@ -70,7 +71,9 @@
                 </group>
 
                 <!--mocap localization -->
-                <include file="$(find-pkg-share qualisys_driver)/launch/qualisys.launch.py"/>
+                <include file="$(find-pkg-share mocap_qualisys)/launch/qualisys.launch.py">
+                    <arg name="server_address" value="$(var mocap_server_address)"/>
+                </include>
                 
                 <node pkg="svea_mocap" exec="mocap_msg_filter.py" name="mocap_msg_filter" output="screen"/>
                 

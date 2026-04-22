@@ -11,6 +11,7 @@
     <arg name="state" default="[-7.4, -15.3, 0.9, 0.0]"/>
 
     <arg name="use_aruco_camera" default="true"/>
+    <arg name="mocap_server_address" default="10.0.0.10"/>
     <arg name="camera_image_topic" default="image_raw"/>
     <arg name="aruco_dictionary" default="DICT_4X4_50"/>
     <arg name="aruco_marker_length_m" default="0.365"/>
@@ -27,8 +28,8 @@
     <arg name="aruco_calibration_file" default="/svea_ws/src/svea_charging/params/camera.yaml"/>
     <arg name="aruco_focal_length_px" default="-1.0"/>
 
-    <arg name="bt_switch_distance_m" default="3.15"/>
-    <arg name="bt_dock_distance_m" default="1.63"/>
+    <arg name="bt_switch_distance_m" default="3.3"/>
+    <arg name="bt_dock_distance_m" default="1.6"/>
 
     <include file="$(find-pkg-share svea_core)/launch/map_and_foxglove.xml">
         <arg name="map" value="$(var map)" />
@@ -97,6 +98,7 @@
             <arg name="name" value="$(var name)" />
             <arg name="is_sim" value="$(var is_sim)" />
             <arg name="map" value="$(var map)" />
+            <arg name="mocap_server_address" value="$(var mocap_server_address)" />
         </include>
 
         <push-ros-namespace namespace="$(var name)"/>

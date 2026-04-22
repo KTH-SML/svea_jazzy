@@ -10,6 +10,7 @@
     <arg name="initial_pose_x"  default="0.0"/>
     <arg name="initial_pose_y"  default="0.0"/>
     <arg name="initial_pose_a"  default="0.0"/> <!-- Yaw Angle -->
+    <arg name="mocap_server_address" default="10.0.0.10"/>
 
     <arg name="use_zenoh"       default="false"/>
 
@@ -28,6 +29,7 @@
         <arg name="initial_pose_x" value="$(var initial_pose_x)" />
         <arg name="initial_pose_y" value="$(var initial_pose_y)" />
         <arg name="initial_pose_a" value="$(var initial_pose_a)" />
+        <arg name="mocap_server_address" value="$(var mocap_server_address)" />
     </include>
 
     <node pkg="tf2_ros" exec="static_transform_publisher" name="qualisys_map_broadcaster"
