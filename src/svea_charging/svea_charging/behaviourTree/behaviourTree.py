@@ -101,7 +101,7 @@ class ChargingMissionTree:
         aruco_distance = self.bb.aruco_distance
         if aruco_distance is None:
             return NodeStatus.FAILURE
-        if self.bb.battery_current > -0.5:
+        if self.bb.battery_current > -0.85:
             self.bb.active_controller = "idle"
             self.bb.mission_phase = "docked"
             return NodeStatus.SUCCESS

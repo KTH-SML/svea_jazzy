@@ -140,7 +140,7 @@ class line_follower(rx.Node):
 
         self.aruco_distance_error_prev = 0.0
         self.aruco_distance_integral = 0.0
-        self.aruco_velocity_integral = 0.0
+        self.aruco_velocity_integral = 2
         self.aruco_velocity_error_prev = 0.0
         self.position_prev = 0.0
 
@@ -231,7 +231,7 @@ class line_follower(rx.Node):
                 float(self.steering_limit_rad),
             )
         )
-        return steering
+        return steering + np.deg2rad(16.0)
 
     def _calculate_velocity(self, normalized_error, dt):
         # Base velocity from line following
@@ -305,6 +305,7 @@ class line_follower(rx.Node):
                 base_velocity,
             )
         )
+        desired_velocity = max(desired_velocity, 0.1) #if lower than 0.1 the velocity controller takes to much time
         if self.aruco_distance <= self.aruco_stop_distance_m:
             desired_velocity = -.22
             self.aruco_velocity_kp = 2.0
