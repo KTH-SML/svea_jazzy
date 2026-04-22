@@ -38,10 +38,10 @@ class stanley_control(rx.Node):
     DELTA_TIME = 0.05
 
 
-    endPoint = rx.Parameter('[1.871350, 1.363510]') #x= -1.885,y=  1.348, yaw = 90deg alt x = 1.6
-    endPoints = rx.Parameter('[-0.1, 1.363510], [1.6, 1.363510], [1.871350, 1.363510]')
+    endPoint = rx.Parameter('[1.873, 1.363510]') #x= -1.885,y=  1.348, yaw = 90deg alt x = 1.6
+    endPoints = rx.Parameter('[-1.389, 1.3795], [-1.0, 1.3795], [-0.1, 1.3795], [1.6, 1.39], [1.873, 1.39]')
 
-    target_velocity = rx.Parameter(0.41)
+    target_velocity = rx.Parameter(0.5)
     controller_name = rx.Parameter("stanley")
     active_controller = rx.Parameter("idle")
 

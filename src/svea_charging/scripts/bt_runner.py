@@ -29,7 +29,7 @@ qos_pubber = QoSProfile(
 
 
 class bt_runner(rx.Node):
-    tick_hz = rx.Parameter(10.0)
+    tick_hz = rx.Parameter(20.0)
     switch_distance_m = rx.Parameter(3.8)
     dock_distance_m = rx.Parameter(1.6)
 

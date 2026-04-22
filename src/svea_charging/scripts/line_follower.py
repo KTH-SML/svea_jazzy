@@ -86,8 +86,8 @@ class line_follower(rx.Node):
 
     crop_start_ratio = rx.Parameter(0.55)
     min_contour_area = rx.Parameter(120)
-    steering_kp = rx.Parameter(1.9)
-    steering_ki = rx.Parameter(.4)
+    steering_kp = rx.Parameter(1.8)
+    steering_ki = rx.Parameter(.3)
     steering_kd = rx.Parameter(0.01)
     steering_limit_rad = rx.Parameter(0.6)
     lost_line_steering_rad = rx.Parameter(0.0)
@@ -96,14 +96,14 @@ class line_follower(rx.Node):
     use_aruco_stop = rx.Parameter(True)
     aruco_distance_topic = rx.Parameter("aruco/distance_m")
     aruco_stop_distance_m = rx.Parameter(1.6)
-    aruco_distance_kp = rx.Parameter(5.0)
-    aruco_distance_ki = rx.Parameter(.5)
-    aruco_distance_kd = rx.Parameter(0.15)
-    aruco_velocity_kp = rx.Parameter(1.2)
-    aruco_velocity_ki = rx.Parameter(.1)
-    aruco_velocity_kd = rx.Parameter(0.01)
+    aruco_distance_kp = rx.Parameter(.7)
+    aruco_distance_ki = rx.Parameter(0.0)
+    aruco_distance_kd = rx.Parameter(0.01)
+    aruco_velocity_kp = rx.Parameter(.5)
+    aruco_velocity_ki = rx.Parameter(0.1)
+    aruco_velocity_kd = rx.Parameter(0.0)
     aruco_max_backup_velocity = rx.Parameter(0.25)
-    aruco_overshoot_deadband_m = rx.Parameter(0.04)
+    aruco_overshoot_deadband_m = rx.Parameter(0.03)
 
     aruco_distance_integral_limit = rx.Parameter(2.0)
 
@@ -111,6 +111,8 @@ class line_follower(rx.Node):
 
     steering_cmd_pub = rx.Publisher(Float32, steering_cmd_topic)
     velocity_cmd_pub = rx.Publisher(Float32, velocity_cmd_topic)
+    distance_cmd_pub = rx.Publisher(Float32, "distance_cmd_topic")
+
     line_error_pub = rx.Publisher(Float32, "line_follower/error_px")
     status_pub = rx.Publisher(String, "line_follower/status")
     centroid_pub = rx.Publisher(Point, "line_follower/centroid")
@@ -303,6 +305,12 @@ class line_follower(rx.Node):
                 base_velocity,
             )
         )
+        if self.aruco_distance <= self.aruco_stop_distance_m:
+            desired_velocity = -.22
+            self.aruco_velocity_kp = 2.0
+        else:
+                self.aruco_velocity_kp = 0.5
+        self.distance_cmd_pub.publish(Float32(data=float(desired_velocity)))
 
         _, _, _, vel = self.localizer.get_state()
         vel_error = desired_velocity - vel
@@ -335,6 +343,8 @@ class line_follower(rx.Node):
         #         base_velocity,
         #     )
         # )
+
+
         return velocity
 
     def loop(self):
