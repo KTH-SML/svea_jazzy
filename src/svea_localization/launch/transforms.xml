@@ -38,6 +38,8 @@
             --frame-id $(var base_frame)
             --child-frame-id $(var name)/wheel_encoder"/>
 
+   
+
     <group if="$(var is_indoor)">
         <!-- LiDAR-->
         <node pkg="tf2_ros" exec="static_transform_publisher" name="lidar_link_broadcaster" 

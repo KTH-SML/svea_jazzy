@@ -93,7 +93,7 @@ class StanleyController:
         self.error_derivative = error_d
 
         self.error_integral += error_i
-        self.error_integral = np.clip(self.error_integral, -self.target_velocity*1.5, self.target_velocity*1.5)  # Anti-windup
+        self.error_integral = np.clip(self.error_integral, -self.target_velocity*2.0, self.target_velocity*2.0)  # Anti-windup
 
         self.error_prev = error
 

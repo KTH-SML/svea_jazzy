@@ -2,7 +2,7 @@
 
 import numpy as np
 from geometry_msgs.msg import Point
-from geometry_msgs.msg import PoseArray, PoseWithCovarianceStamped, Pose
+from geometry_msgs.msg import PoseArray, PoseWithCovarianceStamped, Pose, PoseStamped
 from visualization_msgs.msg import Marker
 import time
 
@@ -38,10 +38,10 @@ class stanley_control(rx.Node):
     DELTA_TIME = 0.05
 
 
-    endPoint = rx.Parameter('[1.873, 1.363510]') #x= -1.885,y=  1.348, yaw = 90deg alt x = 1.6
-    endPoints = rx.Parameter('[-1.389, 1.3795], [-1.0, 1.3795], [-0.1, 1.3795], [1.6, 1.39], [1.873, 1.39]')
+    endPoint = rx.Parameter('[1.873, 1.373510]') #x= -1.885,y=  1.348, yaw = 90deg alt x = 1.6
+    endPoints = rx.Parameter('[-1.389, 1.3895], [-1.0, 1.3895], [-0.1, 1.3895], [1.6, 1.39], [1.873, 1.39]')
 
-    target_velocity = rx.Parameter(0.4)
+    target_velocity = rx.Parameter(0.5)
     controller_name = rx.Parameter("stanley")
     active_controller = rx.Parameter("idle")
 
@@ -77,7 +77,8 @@ class stanley_control(rx.Node):
     def _svea67_pose_cb(self, msg: PoseWithCovarianceStamped):
         self.svea_pose = msg
         self.svea_identified_mocap = True
-
+        
+   
     @rx.Subscriber(PoseWithCovarianceStamped, '/mocap/charging_station/pose', qos_pubber)
     def _charging_station_cb(self, msg: PoseWithCovarianceStamped):
         if not self.charging_station_identified_mocap: #runs once
@@ -90,8 +91,7 @@ class stanley_control(rx.Node):
 
     @rx.Subscriber(Float32, aruco_distance_topic)
     def _aruco_distance_cb(self, msg: Float32):
-        if not bool(self.use_aruco_goal):
-            return
+       
         self.aruco_distance = msg.data
 
     @rx.Subscriber(String, "mission/active_controller", qos_pubber)
@@ -195,11 +195,17 @@ class stanley_control(rx.Node):
         state = self._get_control_state()
         if state is None:
             return
-
+        
+     
         x, y, yaw, vel = state
+        if  0.0 < self.aruco_distance < 5.0:
+           
+            self.controller.target_velocity = 0.2
+        else:
+            self.controller.target_velocity = self.target_velocity
 
-        if bool(self.use_adaptive_speed):
-            self.controller.target_velocity = self.target_velocity * (self.aruco_distance / 5.0)
+        # if bool(self.use_adaptive_speed):
+        #     self.controller.target_velocity = self.target_velocity * (self.aruco_distance / 5.0)
 
         dist = self.distance_to_goal(state)
         if dist <= self.goal_tolerance:

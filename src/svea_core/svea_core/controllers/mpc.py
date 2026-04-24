@@ -81,8 +81,8 @@ class MPC:
         self.min_steering_rate = np.radians(self.load_param('steering_rate_min', -35.0))
         self.max_steering_rate = np.radians(self.load_param('steering_rate_max', 35.0))
 
-        self.min_velocity = self.load_param('velocity_min', -0.4)
-        self.max_velocity = self.load_param('velocity_max', 0.4)
+        self.min_velocity = self.load_param('velocity_min', -0.35)
+        self.max_velocity = self.load_param('velocity_max', 0.35)
 
         self.min_acceleration = self.load_param('acceleration_min', -0.2)
         self.max_acceleration = self.load_param('acceleration_max', 0.4)

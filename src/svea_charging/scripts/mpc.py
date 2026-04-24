@@ -37,7 +37,7 @@ class mpc(rx.Node):
     mpc_freq = rx.Parameter(10)  # Hz
     delta_s = rx.Parameter(0.4)  # m
     mpc_config_ns = rx.Parameter('/mpc')
-    target_speed = rx.Parameter(0.3)  # m/s
+    target_speed = rx.Parameter(0.2)  # m/s
     controller_name = rx.Parameter("mpc")
     active_controller = rx.Parameter("idle")
     steering_cmd_topic = rx.Parameter("mpc/cmd_steering_rad")
@@ -49,14 +49,16 @@ class mpc(rx.Node):
     localizer = LocalizationInterface()
 
     ## MPC parameters 
-    GOAL_REACHED_DIST = 0.01 # The distance threshold (in meters) within which the goal is considered reached.
+    GOAL_REACHED_DIST = 0.02 # The distance threshold (in meters) within which the goal is considered reached.
     GOAL_REACHED_YAW = 0.1    # The yaw angle threshold (in radians) within which the goal orientation is considered reached.
     UPDATE_MPC_PARAM = True   # A flag indicating if the MPC parameters can be updated when the system is approaching the target.
     RESET_MPC_PARAM = False   # A flag indicating if the MPC parameters should be reset when the system is moving away from the target.
     predicted_state = None
+    SLOWDOWN_DISTANCE = 0.2   # Distance from the goal where commanded speed starts ramping down in simulation.
+    MIN_APPROACH_SPEED = 0.12 # Keep a small crawl speed in simulation without dropping too close to zero.
 
     ## Static Planner parameters
-    APPROACH_TARGET_THR = 5   # The distance threshold (in meters) to define when the system is "approaching" the target.
+    APPROACH_TARGET_THR = 3.0   # The distance threshold (in meters) to define when the system is "approaching" the target.
     NEW_REFERENCE_THR = 1     # The distance threshold (in meters) to update the next intermediate reference point. 
     goal_pose = None
     static_path_plan = np.empty((3, 0))
@@ -195,18 +197,19 @@ class mpc(rx.Node):
             measured_dt = time_diff_sec
                         # current_time - self.mpc_last_time
             if measured_dt >= self.DELTA_TIME:
-                reference_trajectory, distance_to_next_point = self.get_mpc_current_reference()
-                if self.is_last_point and distance_to_next_point <= self.APPROACH_TARGET_THR and self.UPDATE_MPC_PARAM:
+                reference_trajectory, distance_to_goal = self.get_mpc_current_reference()
+                if self.is_last_point and distance_to_goal <= self.APPROACH_TARGET_THR and self.UPDATE_MPC_PARAM:
                     # Update the prediction horizon and final state weight matrix only once when approaching target to achieve better parking.
-                    new_Qf = np.array([70, 0, 0, 0,
+                    # Increase x-weight relative to y-weight to improve x-coordinate precision at the goal.
+                    new_Qf = np.array([140, 0, 0, 0,
                                         0, 70, 0, 0,
-                                        0, 0, 20, 0,
+                                        0, 0, 30, 0,
                                         0, 0, 0, 0]).reshape((4, 4))
                     self.controller.set_new_weight_matrix('Qf', new_Qf)
                     self.UPDATE_MPC_PARAM = False
                     self.RESET_MPC_PARAM = True  # Allow resetting when moving away
 
-                elif self.is_last_point and distance_to_next_point > self.APPROACH_TARGET_THR and self.RESET_MPC_PARAM:
+                elif self.is_last_point and distance_to_goal > self.APPROACH_TARGET_THR and self.RESET_MPC_PARAM:
                     # Reset to initial values only once when moving away from target
                     self.current_horizon = self.initial_horizon
                     self.controller.set_new_prediction_horizon(self.initial_horizon)
@@ -214,17 +217,25 @@ class mpc(rx.Node):
                     self.UPDATE_MPC_PARAM = True  # Allow updating again when re-approaching
                     self.RESET_MPC_PARAM = False  # Prevent repeated resetting
 
-                if  not self.is_goal_reached(distance_to_next_point):
+                if  not self.is_goal_reached(distance_to_goal):
                     # Run the MPC to compute control
                     feedback_state = self.get_feedback_state()
                     steering_rate, acceleration = self.controller.compute_control(feedback_state, reference_trajectory)
                     self.steering += steering_rate * measured_dt
+                    self.steering = float(
+                        np.clip(
+                            self.steering,
+                            self.controller.min_steering,
+                            self.controller.max_steering,
+                        )
+                    )
                     self.velocity += acceleration * measured_dt
+                    speed_limit = self.compute_approach_speed_limit(distance_to_goal)
                     self.velocity = float(
                         np.clip(
                             self.velocity,
                             self.controller.min_velocity,
-                            self.controller.max_velocity,
+                            min(self.controller.max_velocity, speed_limit),
                         )
                     )
                     self.predicted_state = self.controller.get_optimal_states()
@@ -269,34 +280,67 @@ class mpc(rx.Node):
 
     def get_mpc_current_reference(self):
         """
-        Retrieves the current reference state for the MPC based on the SVEA's current position.
-
-        Updates the current index in the static path plan if the robot is close to the next point. If at the last point, 
-        it calculates the distance to that point instead.
+        Retrieves a forward-looking reference sequence for the MPC based on the
+        closest remaining point on the static path.
 
         Returns:
-            tuple: (x_ref, distance_to_next_point), where x_ref is the reference state for the prediction horizon
-            (shape: [4, N+1]) and distance_to_next_point is the distance to the next or last reference point.
+            tuple: (x_ref, distance_to_goal), where x_ref is the reference state for
+            the prediction horizon (shape: [4, N+1]) and distance_to_goal is the
+            distance to the final point in the plan.
         """
-        if self.is_last_point is False:
-            distance_to_next_point = self.compute_distance(self.state,self.static_path_plan[:,self.current_index_static_plan])
-            if self.current_index_static_plan == self.static_path_plan.shape[1] - 1:
-                self.is_last_point = True
-            if distance_to_next_point < self.NEW_REFERENCE_THR and not self.is_last_point:
-                self.current_index_static_plan += 1  
-            reference_state = self.static_path_plan[:,self.current_index_static_plan]
-            x_ref = np.tile(reference_state, (self.initial_horizon+1, 1)).T 
-            target_speed_row = np.full((1, x_ref.shape[1]), self.target_speed)                
-            x_ref = np.concatenate((x_ref, target_speed_row), axis=0)
-            return x_ref, distance_to_next_point
+        last_index = self.static_path_plan.shape[1] - 1
+        self.current_index_static_plan = self.find_closest_remaining_point_index()
+        self.is_last_point = self.current_index_static_plan >= max(0, last_index - 1)
 
-        else:
-            distance_to_last_point = self.compute_distance(self.state,self.static_path_plan[:,-1])
-            reference_state = self.static_path_plan[:,-1]
-            x_ref = np.tile(reference_state, (self.initial_horizon+1, 1)).T
-            target_speed_row = np.full((1, x_ref.shape[1]), self.target_speed)
-            x_ref = np.concatenate((x_ref, target_speed_row), axis=0)
-            return x_ref, distance_to_last_point
+        start_index = self.current_index_static_plan
+        end_index = start_index + self.initial_horizon + 1
+        x_ref = self.static_path_plan[:, start_index:min(end_index, last_index + 1)]
+
+        while x_ref.shape[1] < self.initial_horizon + 1:
+            x_ref = np.concatenate((x_ref, self.static_path_plan[:, -1:]), axis=1)
+
+        target_speed_row = np.full((1, x_ref.shape[1]), self.target_speed)
+        x_ref = np.concatenate((x_ref, target_speed_row), axis=0)
+
+        distance_to_goal = self.compute_distance(self.state, self.static_path_plan[:, -1])
+        return x_ref, distance_to_goal
+
+    def find_closest_remaining_point_index(self):
+        """
+        Finds the closest point on the remaining plan while preventing the
+        reference from jumping backwards along the path.
+        """
+        remaining_plan = self.static_path_plan[:2, self.current_index_static_plan:]
+        if remaining_plan.size == 0:
+            return self.static_path_plan.shape[1] - 1
+
+        distances = np.linalg.norm(
+            remaining_plan - np.array(self.state[:2], dtype=float)[:, None],
+            axis=0,
+        )
+        return self.current_index_static_plan + int(np.argmin(distances))
+
+    def compute_approach_speed_limit(self, distance_to_goal):
+        """
+        Linearly reduce the maximum forward speed as the vehicle approaches the
+        final docking point. The final reference point uses zero speed so the
+        optimizer has a true stopping target even when GOAL_REACHED_DIST is low.
+        """
+        max_forward_speed = min(float(self.target_speed), float(self.controller.max_velocity))
+        if not self.is_last_point:
+            return max_forward_speed
+
+        if distance_to_goal <= self.GOAL_REACHED_DIST:
+            return 0.0
+
+        # On the real platform, low crawl speeds map to very small integer throttle
+        # commands and the car may not move at all. Keep the full requested docking
+        # speed until the stop tolerance is satisfied.
+        if not self.is_sim:
+            return max_forward_speed
+
+        slowdown_ratio = np.clip(distance_to_goal / self.SLOWDOWN_DISTANCE, 0.0, 1.0)
+        return max(self.MIN_APPROACH_SPEED, max_forward_speed * slowdown_ratio)
 
     def get_feedback_state(self):
         x, y, yaw, velocity = self.state
@@ -426,7 +470,10 @@ class mpc(rx.Node):
         if  not self.is_last_point:
             return False        
         elif distance < self.GOAL_REACHED_DIST:
-            yaw_error = self.state[2] - self.static_path_plan[2,-1]
+            yaw_error = math.atan2(
+                math.sin(self.state[2] - self.static_path_plan[2, -1]),
+                math.cos(self.state[2] - self.static_path_plan[2, -1]),
+            )
             if  abs(yaw_error) < self.GOAL_REACHED_YAW:
                 return True
             else:

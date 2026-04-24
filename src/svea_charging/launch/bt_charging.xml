@@ -29,7 +29,7 @@
     <arg name="aruco_focal_length_px" default="-1.0"/>
     <arg name="svea_mocap_name" default="svea67"/> 
 
-    <arg name="bt_switch_distance_m" default="3.0"/>
+    <arg name="bt_switch_distance_m" default="2.5"/>
     <arg name="bt_dock_distance_m" default="1.63"/>
 
     <include file="$(find-pkg-share svea_core)/launch/map_and_foxglove.xml">
@@ -167,8 +167,8 @@
             <param name="use_rviz" value="$(var use_foxglove)"/>
             <param name="is_sim" value="$(var is_sim)"/>
             <param name="localization/base_frame" value="$(var name)/base_link"/>
-            <param name="mpc_freq" value="10"/> 
-            <param name="target_speed" value="0.2"/>
+            <param name="mpc_freq" value="20"/> 
+            <param name="target_speed" value="0.3"/>
             <param name="delta_s"  value="0.4"/>
             <param name="svea_mocap_name" value="$(var svea_mocap_name)"/>
             <param name="mpc_config_ns" value="~mpc"/>
