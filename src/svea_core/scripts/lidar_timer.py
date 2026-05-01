@@ -43,35 +43,20 @@ class lidar_filter(rx.Node):
     def on_startup(self):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-<<<<<<< HEAD
 
-=======
->>>>>>> el2425/main
         # Use a timer to check periodically
         self.timer = self.create_timer(0.03, self.get_latest_transform_header)
         self.header = Header()
         self.header.stamp = self.get_clock().now().to_msg()
-<<<<<<< HEAD
-    
-=======
 
->>>>>>> el2425/main
     def get_latest_transform_header(self):
         try:
             # "latest" means we don't specify a time
             transform = self.tf_buffer.lookup_transform(
-<<<<<<< HEAD
-                target_frame='base_link',       # target
-                source_frame='map',             # source
-                time=Time()          # latest available
-            )
-
-=======
                 target_frame=self.target_frame, # target
                 source_frame=self.source_frame, # source
                 time=Time()          # latest available
             )
->>>>>>> el2425/main
             self.header = transform.header
             # self.get_logger().info(
             #     f"Latest transform header:\n"
@@ -79,10 +64,7 @@ class lidar_filter(rx.Node):
             #     f"  Child Frame ID: {transform.child_frame_id}\n"
             #     f"  Stamp: {self.header.stamp.sec}.{self.header.stamp.nanosec}"
             # )
-<<<<<<< HEAD
 
-=======
->>>>>>> el2425/main
         except (LookupException, ConnectivityException, ExtrapolationException) as e:
             self.get_logger().warn(f"Transform not available: {e}")
 
