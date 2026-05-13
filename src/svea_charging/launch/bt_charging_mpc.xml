@@ -131,7 +131,7 @@
             <remap from="/camera_info" to="/camera/camera_info"/>
         </node> -->
 
-        <node name="aruco_camera_test" if="$(var use_aruco_camera)" pkg="svea_charging" exec="aruco_camera_test.py" output="screen">
+        <node name="aruco_camera_test" if="$(var use_aruco_camera)" pkg="svea_charging" exec="aruco_reader_mpc.py" output="screen">
             <param name="dictionary" value="$(var aruco_dictionary)"/>
             <param name="marker_length_m" value="$(var aruco_marker_length_m)"/>
             <param name="display" value="$(var aruco_display)"/>
